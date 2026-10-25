@@ -390,10 +390,8 @@
             <input data-course="univ" type="text" class="field" placeholder="예: 한국외국어대학교" autocomplete="organization"></label>
           <label class="block"><span class="block text-xs font-bold mb-1.5">학과</span>
             <input data-course="dept" type="text" class="field" placeholder="예: 중국학대학"></label>
-          <label class="block"><span class="block text-xs font-bold mb-1.5">교수명</span>
+          <label class="block col-span-2"><span class="block text-xs font-bold mb-1.5">교수명</span>
             <input data-course="prof" type="text" class="field" placeholder="예: 박정원"></label>
-          <label class="block"><span class="block text-xs font-bold mb-1.5">과목명</span>
-            <input data-course="course" type="text" class="field" placeholder="예: 현대중국사회의 이해"></label>
         </div>
         <dl id="courseView" class="glass-chip rounded-2xl p-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm" data-student></dl>
       </div>
@@ -440,10 +438,10 @@
           <div id="pane-url" role="tabpanel" aria-labelledby="tab-url" class="hidden space-y-2">
             <input id="urlName" type="text" class="field" placeholder="자료 이름 (비우면 페이지 제목)" aria-label="자료 이름">
             <div class="flex gap-2">
-              <input id="urlInput" type="url" class="field flex-1" placeholder="https://..." aria-label="웹 페이지 주소">
+              <input id="urlInput" type="url" class="field flex-1" placeholder="https://… 또는 구글 드라이브 공유 링크" aria-label="웹 페이지 또는 구글 드라이브 주소">
               <button id="addUrl" type="button" class="pill pill-dark px-4 text-sm">불러오기</button>
             </div>
-            <p class="text-[11px] text-mute">사이트가 직접 읽기를 막으면 공개 리더(r.jina.ai)를 거쳐 본문만 가져옵니다. 로그인이 필요한 LMS 페이지는 TEXT 탭에 붙여넣으세요.</p>
+            <p class="text-[11px] text-mute leading-5"><b>구글 드라이브·문서·슬라이드·시트 공유 링크</b>도 됩니다(공유 설정: 「링크가 있는 모든 사용자 · 뷰어」). 드라이브의 PDF·HWPX·TXT·HTML 파일도 글자를 뽑아 저장합니다. 일반 사이트가 직접 읽기를 막으면 공개 리더(r.jina.ai)를 거쳐 본문만 가져옵니다.</p>
             <p id="urlStatus" class="hidden rounded-2xl px-3 py-2 text-xs"></p>
           </div>
         </div>
@@ -693,6 +691,8 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.15.3 REFERENCE → URL에 구글 드라이브·문서·슬라이드·시트 공유 링크 지원 (서버·Vercel 중계 /api/fetch, PDF·HWPX·HTML·TXT 글자 추출)
+// v1.15.2 강의 정보에서 과목명 칸 삭제, 과목명은 📘 COURSES 등록 이름을 사용
 // v1.15.1 히스토리 이름을 📘 COURSES 과목명으로 자동 지정, 「히스토리 이름」 입력칸 삭제
 // v1.15.0 교과목 등록(교수: 📘 COURSES, 서버 자동 게시·courses.json), 학생은 교과목을 고른 뒤 채팅(첫 화면 선택 창·채팅 머리 선택 상자)
 // v1.14.1 모바일 반응형 보강: 입력칸 16px(아이폰 확대 방지), 터치 화면 버튼·칩 크기 키움, 휴대폰에서 표를 카드로, 노치 영역 여백, 대화상자 넓게
@@ -730,7 +730,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.15.1';
+const APP_VERSION = 'v1.15.3';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -1056,7 +1056,7 @@ document.querySelectorAll('[data-collapse]').forEach(b => b.onclick = () => { se
 function renderSummaries() {
   const mats = activeMaterials(), chars = mats.reduce((a, m) => a + m.text.length, 0);
   $('sum-ai').textContent = aiMode() ? `${PROVIDERS[S.provider].name} · ${S.models[S.provider]}` : '키 없음 · 샘플 모드';
-  $('sum-course').textContent = S.course.course || '과목명 미입력';
+  $('sum-course').textContent = [S.course.univ, S.course.dept, S.course.prof].filter(x => x && x.trim()).join(' · ') || '미입력';
   $('sum-ref').textContent = `${S.materials.length ? '' : '샘플 · '}자료 ${mats.length}개 · ${chars.toLocaleString()}자`;
   $('sum-rules').textContent = ['mode', 'tone', 'length', 'lang'].map(k => RULE_LABELS[k][S.rules[k]]).join(' · ');
   $('sum-hist').textContent = `${history.length}개 저장`;
@@ -1230,33 +1230,83 @@ function htmlToText(html) {
   d.querySelectorAll('p,div,li,h1,h2,h3,h4,h5,h6,br,tr,section,article,blockquote').forEach(e => e.append('\n'));
   return { title: d.title.trim(), text: (d.body?.textContent || '').replace(/[ \t ]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim() };
 }
+// 구글 드라이브·문서 공유 링크 → 내려받기 주소 (공유 설정: 「링크가 있는 모든 사용자」)
+function driveLink(url) {
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  if (!/(^|\.)google\.com$/i.test(u.hostname)) return null;
+  const id = (u.pathname.match(/\/d\/([A-Za-z0-9_-]{10,})/) || [])[1] || u.searchParams.get('id');
+  if (!id) return null;
+  if (/^docs\.google\.com$/i.test(u.hostname)) {
+    if (u.pathname.startsWith('/document/')) return { id, type: '구글 문서', url: `https://docs.google.com/document/d/${id}/export?format=txt` };
+    if (u.pathname.startsWith('/presentation/')) return { id, type: '구글 슬라이드', url: `https://docs.google.com/presentation/d/${id}/export/txt` };
+    if (u.pathname.startsWith('/spreadsheets/')) return { id, type: '구글 시트', url: `https://docs.google.com/spreadsheets/d/${id}/export?format=csv` };
+  }
+  return { id, type: '드라이브 파일', url: `https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t` };
+}
+// 받은 내용을 종류에 맞게 글자로: PDF·HWPX(ZIP)·HTML·텍스트
+async function bytesToText(buf, contentType, fileName) {
+  const u8 = new Uint8Array(buf.slice(0, 8));
+  const head = String.fromCharCode(...u8);
+  if (head.startsWith('%PDF') || /pdf/i.test(contentType)) return { text: await pdfText(buf), kind: 'PDF' };
+  if (head.startsWith('PK')) {
+    if (/\.docx$/i.test(fileName || '')) throw new Error('Word(.docx)는 읽을 수 없습니다. 구글 문서로 열어 공유하거나 PDF로 올려 주세요');
+    return { text: await hwpxText(buf), kind: 'HWPX' };
+  }
+  const str = new TextDecoder('utf-8').decode(buf);
+  if (/html/i.test(contentType) || /^\s*<(!doctype|html)/i.test(str)) {
+    // 로그인·권한 화면이면 공유 설정 안내
+    if (/accounts\.google\.com|ServiceLogin|요청 권한|Request access|You need access/i.test(str)) throw new Error('구글 로그인 화면이 왔습니다. 공유 설정을 「링크가 있는 모든 사용자 · 뷰어」로 바꿔 주세요');
+    const h = htmlToText(str);
+    return { text: h.text, title: h.title, kind: 'HTML' };
+  }
+  return { text: str.replace(/^﻿/, '').trim(), kind: '텍스트' };
+}
+// 내려받기: ① 브라우저가 직접 ② 튜터봇 서버·Vercel 중계(/api/fetch, 교수 로그인) ③ 공개 리더(글자만)
+async function fetchBytes(target) {
+  try {
+    const r = await fetch(target);
+    if (r.ok) return { buf: await r.arrayBuffer(), type: r.headers.get('content-type') || '', name: '', via: '직접' };
+  } catch {}
+  let token = '';
+  try { token = sessionStorage.getItem(PROF_TOKEN) || ''; } catch {}
+  if (SERVER && token) {
+    try {
+      const r = await fetch(`/api/fetch?url=${encodeURIComponent(target)}`, { headers: { 'x-tutorbot-token': token } });
+      if (r.ok) return { buf: await r.arrayBuffer(), type: r.headers.get('content-type') || '', name: decodeURIComponent(r.headers.get('x-filename') || ''), via: '튜터봇 서버' };
+      if (r.status !== 404 && r.status !== 405) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`); }
+    } catch (e) { if (!/Failed to fetch/i.test(e.message)) throw e; }
+  }
+  const r = await fetch(`https://r.jina.ai/${target}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const body = await r.text();
+  return { reader: true, title: (body.match(/^Title:\s*(.+)$/m) || [])[1] || '', text: body.replace(/^(Title|URL Source|Published Time|Markdown Content):.*$/gm, '').trim(), via: '공개 리더' };
+}
 $('addUrl').onclick = async () => {
   const url = $('urlInput').value.trim(), st = $('urlStatus');
   if (!/^https?:\/\/\S+$/i.test(url)) { setNote(st, 'fail', '✘ http:// 또는 https:// 로 시작하는 주소를 넣으세요.'); return; }
+  const drive = driveLink(url);
   const btn = $('addUrl');
   btn.disabled = true;
-  setNote(st, 'info', '⏳ 페이지를 읽는 중…');
-  let got = null, via = '직접';
+  setNote(st, 'info', drive ? `⏳ ${drive.type}을 내려받는 중…` : '⏳ 페이지를 읽는 중…');
+  let got = null, via = '';
   try {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const body = await r.text();
-    got = /html/i.test(r.headers.get('content-type') || '') || /<html|<body/i.test(body) ? htmlToText(body) : { title: '', text: body.trim() };
-  } catch {
-    try {
-      via = '공개 리더';
-      const r = await fetch(`https://r.jina.ai/${url}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const body = await r.text();
-      got = { title: (body.match(/^Title:\s*(.+)$/m) || [])[1] || '', text: body.replace(/^(Title|URL Source|Published Time|Markdown Content):.*$/gm, '').trim() };
-    } catch (e) { got = null; setNote(st, 'fail', `✘ 페이지를 읽지 못했습니다 (${e.message}). 본문을 복사해 TEXT 탭에 붙여넣으세요.`); }
+    const res = await fetchBytes(drive ? drive.url : url);
+    via = res.via;
+    if (res.reader) got = { title: res.title, text: res.text, kind: '텍스트' };
+    else got = await bytesToText(res.buf, res.type, res.name), got.title = got.title || (res.name || '').replace(/\.[^.]+$/, '');
+  } catch (e) {
+    setNote(st, 'fail', `✘ 읽지 못했습니다 — ${e.message}.${drive ? ' 구글 드라이브는 공유 설정을 「링크가 있는 모든 사용자 · 뷰어」로 해 주세요.' : ' 본문을 복사해 TEXT 탭에 붙여넣으세요.'}`);
   }
   btn.disabled = false;
   if (!got) return;
-  if (got.text.length < 30) { setNote(st, 'fail', '✘ 본문 글자를 거의 찾지 못했습니다. TEXT 탭에 붙여넣어 주세요.'); return; }
-  const name = $('urlName').value.trim() || got.title.slice(0, 60) || new URL(url).hostname;
+  if (!got.text || got.text.length < 30) {
+    setNote(st, 'fail', drive ? '✘ 글자를 거의 찾지 못했습니다. 공유 설정이 「링크가 있는 모든 사용자」인지, 스캔 이미지 PDF가 아닌지 확인하세요.' : '✘ 본문 글자를 거의 찾지 못했습니다. TEXT 탭에 붙여넣어 주세요.');
+    return;
+  }
+  const name = $('urlName').value.trim() || got.title?.slice(0, 60) || (drive ? `${drive.type} ${drive.id.slice(0, 6)}` : new URL(url).hostname);
   addMaterial({ name, kind: 'url', src: url, text: got.text.slice(0, 200000) });
-  setNote(st, 'ok', `✔ 「${name}」 ${got.text.length.toLocaleString()}자를 불러왔습니다 (${via} 읽기).`);
+  setNote(st, 'ok', `✔ 「${name}」 ${got.text.length.toLocaleString()}자를 불러왔습니다 (${drive ? `${drive.type} · ` : ''}${got.kind || ''} · ${via} 읽기).`);
   $('urlInput').value = ''; $('urlName').value = '';
 };
 
@@ -2570,6 +2620,7 @@ $('regAdd').onclick = () => {
   if (i >= 0) courses[i].name = name.slice(0, 60); else courses.push({ code, name: name.slice(0, 60) });
   $('regCode').value = ''; $('regName').value = '';
   saveCourses();
+  if (code === COURSE_CODE) syncCourseName();
   toast(i >= 0 ? `「${name}」 과목명을 바꿨습니다.` : `「${name}」(?c=${code})을 등록했습니다. 「열기」를 눌러 자료를 넣으세요.`);
 };
 $('regName').addEventListener('keydown', e => { if (e.key === 'Enter') $('regAdd').click(); });
@@ -2694,13 +2745,16 @@ fitChat();
 growAsk();
 if (!chips.length) scheduleChips(0);
 else { const lastBot = [...messages].reverse().find(m => m.role === 'assistant'); if (!lastBot && aiMode()) scheduleChips(0); }
-// 과목명이 비어 있으면 등록한 교과목 이름으로 채움
-if (COURSE_CODE && !S.course.course && courseName(COURSE_CODE)) {
-  S.course.course = courseName(COURSE_CODE);
-  document.querySelectorAll('[data-course="course"]').forEach(inp => { inp.value = S.course.course; });
+// 과목명은 📘 COURSES에 등록한 이름을 씀 (강의 정보에는 과목명 칸이 없음)
+function syncCourseName() {
+  const name = courseName(COURSE_CODE);
+  if (!name || S.course.course === name) return;
+  S.course.course = name;
   if (!STUDENT) saveSettings();
   renderMode(); renderSummaries(); renderCourseView(); renderMessages();
+  if (STUDENT) document.title = `${name} — 튜터봇`;
 }
+syncCourseName();
 renderCourses(); renderCoursePicker();
 if (needCourse()) openCoursePicker();
 if (PROF) { scheduleCoursesPublish(); checkServer(); schedulePublish(300); $('shareAI').checked = S.shareAI; scheduleAIShare(300); }

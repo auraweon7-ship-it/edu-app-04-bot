@@ -104,6 +104,25 @@ async function aiConfig(req, res) {
   send(res, 200, { ok: true, enabled: true, provider: d.provider, model: d.model.trim() });
 }
 
+// ---------- 구글 드라이브·문서 내려받기 중계 (브라우저는 구글 파일을 직접 못 읽음) ----------
+// 교수 로그인 필요, 구글 주소만, 20MB까지
+const FETCH_HOSTS = /^(docs|drive|drive\.usercontent)\.google\.com$/i;
+async function fetchApi(req, res) {
+  if (req.method !== 'GET') return send(res, 405, { error: 'GET만 쓸 수 있습니다' });
+  if (!authOK(req)) return send(res, 401, { error: '교수 로그인이 필요합니다' });
+  let target;
+  try { target = new URL(new URL(req.url, 'http://localhost').searchParams.get('url') || ''); } catch { return send(res, 400, { error: '주소가 올바르지 않습니다' }); }
+  if (target.protocol !== 'https:' || !FETCH_HOSTS.test(target.hostname)) return send(res, 400, { error: '구글 드라이브·문서 주소만 받을 수 있습니다' });
+  const r = await fetch(target, { redirect: 'follow' });
+  if (!r.ok) return send(res, r.status, { error: `구글에서 받지 못했습니다 (HTTP ${r.status}) — 공유 설정을 확인하세요` });
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length > 20 * 1024 * 1024) return send(res, 413, { error: '20MB가 넘는 파일입니다' });
+  const cd = r.headers.get('content-disposition') || '';
+  const name = (cd.match(/filename\*=UTF-8''([^;]+)/i) || [])[1] || (cd.match(/filename="?([^";]+)"?/i) || [])[1] || '';
+  res.writeHead(200, { 'content-type': r.headers.get('content-type') || 'application/octet-stream', 'x-filename': name ? encodeURIComponent(decodeURIComponent(name)) : '', 'cache-control': 'no-store' });
+  res.end(buf);
+}
+
 // ---------- 교과목 목록 (교수가 등록, 학생 화면이 읽음) ----------
 const COURSES_FILE = path.join(DATA_DIR, 'courses.json');
 async function coursesApi(req, res) {
@@ -200,12 +219,13 @@ function serveFile(req, res, pathname) {
 http.createServer((req, res) => {
   let { pathname } = new URL(req.url, 'http://localhost');
   // 페이지 주소 뒤에 경로가 붙어 있어도(예: /index.html/api/deploy) API로 처리
-  const apiMatch = pathname.match(/\/api\/(deploy|ai|chat|courses)\/?$/);
+  const apiMatch = pathname.match(/\/api\/(deploy|ai|chat|courses|fetch)\/?$/);
   if (apiMatch) pathname = `/api/${apiMatch[1]}`;
   // API·쓰기 요청은 서버 창에 기록 (문제 확인용)
   if (apiMatch || req.method !== 'GET') res.on('finish', () => console.log(`[${new Date().toLocaleTimeString('ko-KR')}] ${req.method} ${req.url} → ${res.statusCode} (${req.socket.remoteAddress})`));
   if (pathname === '/api/ping' || pathname.endsWith('/api/ping')) return send(res, 200, { app: 'tutorbot' });
   if (pathname === '/api/deploy') return api(req, res).catch(e => send(res, 500, { error: e.message }));
+  if (pathname === '/api/fetch') return fetchApi(req, res).catch(e => send(res, 502, { error: e.message }));
   if (pathname === '/api/courses') return coursesApi(req, res).catch(e => send(res, 500, { error: e.message }));
   if (pathname === '/api/ai') return aiConfig(req, res).catch(e => send(res, 500, { error: e.message }));
   if (pathname === '/api/chat') return chat(req, res).catch(e => send(res, 500, { error: { message: e.message } }));
