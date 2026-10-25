@@ -609,6 +609,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.7.1  학생 화면을 열 때 챗봇 설정 창이 저절로 뜨지 않게 함 (⚙ 설정 버튼으로 열기)
 // v1.7.0  교수 모드에서 저장한 자료를 서버(node server.js)에 자동 게시 → 같은 주소로 접속한 학생 기기에서 사용
 // v1.6.0  교수 모드(비밀번호 로그인)·학생 모드 구분: 로그인 전에는 챗봇 섹션만 표시, 교수 모드에 로그아웃
 // v1.5.0  학생용 HTML → 챗봇 HTML: 채팅 카드만 표시, 학생 정보·AI 설정은 ⚙ 설정 창, 채팅 머리에 대학·학과·교수 표시
@@ -621,7 +622,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.7.0';
+const APP_VERSION = 'v1.7.1';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -2210,7 +2211,6 @@ fitChat();
 growAsk();
 if (!chips.length) scheduleChips(0);
 else { const lastBot = [...messages].reverse().find(m => m.role === 'assistant'); if (!lastBot && aiMode()) scheduleChips(0); }
-if (STUDENT && (!studentReady() || !aiMode())) openPanel();
 if (PROF) schedulePublish(300);
 </script>
 </body>
