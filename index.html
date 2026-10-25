@@ -114,6 +114,8 @@
   .md p + p, .md p + ul, .md ul + p, .md p + ol, .md ol + p, .md blockquote + p, .md p + blockquote { margin-top: .45rem; }
   .md ul { list-style: disc; padding-left: 1.15rem; } .md ol { list-style: decimal; padding-left: 1.3rem; }
   .md li + li { margin-top: .15rem; } .md b { font-weight: 700; }
+  .md .md-sec { margin-top: .8rem; padding-top: .55rem; border-top: 1px dashed rgba(0,0,0,.12); font-size: .78rem; font-weight: 700; letter-spacing: .02em; color: #4a4a50; }
+  .md .md-sec:first-child { margin-top: .2rem; padding-top: 0; border-top: 0; }
   .md code { font-size: .82em; padding: .05rem .35rem; border-radius: .4rem; background: var(--sunk); }
   .md blockquote { margin: .35rem 0; padding: .35rem .75rem; border-left: 3px solid rgba(var(--accent),.55); background: #f5f7fb; border-radius: .2rem .6rem .6rem .2rem; }
   .caret::after { content: '▍'; margin-left: 1px; color: rgb(var(--accent)); animation: blink 1s steps(2) infinite; }
@@ -618,6 +620,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.9.0  답변을 「📚 수업자료」+「🤖 AI 분석」 두 부분으로 구성(힌트 단계 포함), 두 머리글을 구분선으로 표시
 // v1.8.4  AI 답변을 더 구체적으로: 첫 문장에 직접 답, 자료가 목록뿐이면 학술 지식으로 보충(📎 보충 설명), 보통·자세히 길이 늘림
 // v1.8.3  학생 화면에서 출처 칩(교수 자료 원문 연결) 표시하지 않음 — 화면·저장 문서·제출 파일 모두
 // v1.8.2  학생 화면에서 추천 질문 칩 줄 삭제(생성도 안 함), 자료 속 코드에서 나온 이상한 추천 질문 거름
@@ -639,7 +642,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.8.4';
+const APP_VERSION = 'v1.9.0';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -1371,7 +1374,7 @@ function sampleReply(q, stage) {
     return { outside: false, sources: [], text: `**힌트 2단계** · ${friendly ? '자료의 이 문장을 보세요. 빈칸에 들어갈 말이 답의 열쇠예요.' : '자료의 다음 문장을 보십시오. 빈칸에 들어갈 말이 답의 열쇠입니다.'}\n> ${blanked}\n\n👉 ${friendly ? '빈칸을 채워서 질문에 직접 답해 보세요!' : '빈칸을 채워 질문에 직접 답해 보시기 바랍니다.'}${langNote}` };
   }
   const lead = R.mode === 'socratic' ? '**정답 공개** · ' : '';
-  return { outside: false, sources: use.map(h => ({ doc: h.m.name, quote: h.s.text, mid: h.m.id })), text: `${lead}${friendly ? '좋은 질문이에요! 😊 수업자료에 따르면 이렇습니다.' : '질문에 답변드립니다. 수업자료의 내용은 다음과 같습니다.'}\n${use.map(h => `- ${h.s.text}`).join('\n')}\n\n${friendly ? '더 궁금한 점이 있으면 편하게 물어봐요!' : '추가로 궁금하신 점이 있으면 질문해 주십시오.'}${langNote}` };
+  return { outside: false, sources: use.map(h => ({ doc: h.m.name, quote: h.s.text, mid: h.m.id })), text: `${lead}${friendly ? '좋은 질문이에요! 😊' : '질문에 답변드립니다.'}\n**📚 수업자료**\n${use.map(h => `- ${h.s.text}`).join('\n')}\n**🤖 AI 분석**\n${friendly ? 'AI가 연결되면 여기에서 자료를 바탕으로 한 해석과 의미를 설명해 드려요.' : 'AI가 연결되면 여기에서 자료를 바탕으로 한 해석과 의미를 설명해 드립니다.'}\n\n${friendly ? '더 궁금한 점이 있으면 편하게 물어봐요!' : '추가로 궁금하신 점이 있으면 질문해 주십시오.'}${langNote}` };
 }
 function fakeStream(text, onDelta, signal) {
   return new Promise((res, rej) => {
@@ -1412,7 +1415,7 @@ function systemPrompt(stage, q) {
 
 [답변 규칙]
 1. <수업자료>를 1차 근거로 답한다. 자료에 없는 사실을 자료에 있는 것처럼 말하지 않는다.
-1-1. 수업자료가 주제·작가·작품을 목록이나 일정으로만 언급하고 설명이 부족하면, 그 주제에 대해 대학 강의 수준에서 널리 인정된 학술 지식으로 구체적으로 설명한다. 이때 수업자료에서 그 주제가 다뤄지는 위치(주차·단원)를 한 줄로 연결해 주고, 자료 밖 지식으로 보충한 부분 앞에는 "📎 보충 설명:"을 붙인다.
+1-1. 수업자료가 주제·작가·작품을 목록이나 일정으로만 언급하고 설명이 부족하면, 그 주제에 대해 대학 강의 수준에서 널리 인정된 학술 지식으로 구체적으로 설명한다(🤖 AI 분석 부분에서).
 1-2. 강의계획서 문장을 그대로 옮겨 나열하지 말고, 학생이 물은 내용 자체에 답한다.
 2. 질문의 답이 수업자료에 없으면 본문 첫 줄을 정확히 "📌 수업자료에 없는 내용입니다."(답변 언어와 관계없이 이 한국어 문장 그대로)로 쓰고, 일반적으로 알려진 지식으로 조심스럽게 보충한 뒤 정확한 내용은 교수님께 확인하라고 안내한다.
 3. ${modeRule}
@@ -1420,6 +1423,12 @@ function systemPrompt(stage, q) {
 5. 길이: ${len}
 6. 답변 언어: ${LANG_FULL[R.lang]}로 답한다. (출처 quote만 원문 그대로)
 7. 형식: 굵게(**)와 목록(- )만 쓰고 제목(#)·표·코드 블록은 쓰지 않는다.
+7-1. 답변 구성: 본문(첫 줄 표시 다음)을 반드시 아래 두 부분으로 나누고, 각 제목 줄은 글자 그대로 한 줄에 쓴다.
+**📚 수업자료**
+- 이 질문에 대해 수업자료가 말하는 내용을 정리한다. 자료 이름·장·주차를 밝히고 핵심 표현은 짧게 인용한다. 관련 내용이 없으면 "수업자료에는 이 내용이 없습니다." 한 줄만 쓴다.
+**🤖 AI 분석**
+- 수업자료를 바탕으로 AI가 해석·비교·배경·의의·다른 개념과의 연결을 분석해 설명한다. 자료 밖 학술 지식도 쓸 수 있지만 수업자료 내용과 섞어 말하지 않는다.
+- 힌트 1·2단계에서는 📚 수업자료에 "어디를 보면 되는지"만 쓰고, 🤖 AI 분석에는 정답을 말하지 않는 분석 관점과 되묻는 질문을 쓴다.
 8. 본문이 끝나면 줄을 바꿔 아래 메타데이터를 반드시 붙인다. 학생 화면에는 보이지 않으므로 본문에서 언급하지 않는다.
 <<<META
 {"sources":[{"doc":"근거 자료 이름(자료 목록의 이름 그대로)","quote":"근거가 된 문장을 자료에서 글자 그대로 복사"}],"outside":false,"next":["학생이 이어서 물어볼 만한 질문"]}
@@ -1639,6 +1648,8 @@ function md(text) {
       flush();
       if (!line.trim()) continue;
       if ((m = line.match(/^&gt;\s?(.*)$/))) out.push(`<blockquote>${inline(m[1])}</blockquote>`);
+      // 「📚 수업자료」「🤖 AI 분석」 제목 줄은 구분선 있는 작은 머리글로
+      else if (/^\*\*\s*(📚|🤖)[^*]+\*\*\s*:?$/u.test(line.trim())) out.push(`<p class="md-sec">${line.trim().replace(/^\*\*\s*|\s*\*\*\s*:?$/g, '')}</p>`);
       else out.push(`<p>${inline(line.replace(/^#{1,6}\s+/, ''))}</p>`);
     }
   }
@@ -1869,6 +1880,8 @@ const EXPORT_CSS = `
   .meta{flex:none;font-size:10px;color:var(--mute);white-space:nowrap}
   .bubble p{margin:0}.bubble p+p,.bubble ul,.bubble ol,.bubble blockquote{margin-top:6px}.bubble ul,.bubble ol{margin-bottom:0;padding-left:20px}
   .bubble blockquote{margin-left:0;margin-right:0;padding:5px 12px;border-left:3px solid rgba(var(--accent),.55);background:#f5f7fb;border-radius:3px 9px 9px 3px}
+  .bubble .md-sec{margin-top:10px;padding-top:7px;border-top:1px dashed rgba(0,0,0,.12);font-size:12px;font-weight:700;color:#4a4a50}
+  .bubble .md-sec:first-child{margin-top:2px;padding-top:0;border-top:0}
   .out{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--sunk);box-shadow:var(--press);margin-bottom:6px}
   .src{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px}
   .src span{font-size:11px;padding:3px 10px;border-radius:999px;background:var(--face);box-shadow:var(--raise-sm);max-width:100%;overflow-wrap:anywhere}
