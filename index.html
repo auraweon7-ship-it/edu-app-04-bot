@@ -454,6 +454,11 @@
               <button id="clearMats" type="button" class="link hover:!text-ink">모두 지우기</button>
             </div>
           </div>
+          <div class="flex flex-wrap items-center gap-2 mb-2 hidden" id="refreshRow" data-prof>
+            <button id="refreshUrls" type="button" class="pill px-3 py-1 text-[11px]" title="URL·구글 드라이브로 불러온 자료를 모두 다시 불러와 최신 내용으로 바꿉니다">↻ URL·드라이브 자료 모두 다시 불러오기</button>
+            <span id="refreshCount" class="text-[11px] text-mute"></span>
+          </div>
+          <p id="refreshStatus" class="hidden mb-2 rounded-2xl px-3 py-2 text-xs leading-5"></p>
           <ul id="matList" class="space-y-2"></ul>
         </div>
 
@@ -691,6 +696,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.15.4 URL·구글 드라이브 자료 새로고침: 「모두 다시 불러오기」와 자료별 ↻, 불러온 날짜 표시, 바뀐 자료 요약
 // v1.15.3 REFERENCE → URL에 구글 드라이브·문서·슬라이드·시트 공유 링크 지원 (서버·Vercel 중계 /api/fetch, PDF·HWPX·HTML·TXT 글자 추출)
 // v1.15.2 강의 정보에서 과목명 칸 삭제, 과목명은 📘 COURSES 등록 이름을 사용
 // v1.15.1 히스토리 이름을 📘 COURSES 과목명으로 자동 지정, 「히스토리 이름」 입력칸 삭제
@@ -730,7 +736,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.15.3';
+const APP_VERSION = 'v1.15.4';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -895,7 +901,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } }
 };
 const validMat = m => m && typeof m.name === 'string' && typeof m.text === 'string';
-const normMat = m => ({ id: String(m.id || uid()), name: m.name.slice(0, 80) || '이름 없는 자료', kind: KIND_LABEL[m.kind] ? m.kind : 'note', src: String(m.src || ''), text: m.text });
+const normMat = m => ({ id: String(m.id || uid()), name: m.name.slice(0, 80) || '이름 없는 자료', kind: KIND_LABEL[m.kind] ? m.kind : 'note', src: String(m.src || ''), text: m.text, ...(typeof m.loadedAt === 'string' ? { loadedAt: m.loadedAt } : {}) });
 
 function applySettings(s) {
   if (!s || typeof s !== 'object') return;
@@ -1270,7 +1276,7 @@ async function fetchBytes(target) {
   } catch {}
   let token = '';
   try { token = sessionStorage.getItem(PROF_TOKEN) || ''; } catch {}
-  if (SERVER && token) {
+  if (SERVER && token && /(^|\.)google\.com$/i.test(new URL(target).hostname)) {
     try {
       const r = await fetch(`/api/fetch?url=${encodeURIComponent(target)}`, { headers: { 'x-tutorbot-token': token } });
       if (r.ok) return { buf: await r.arrayBuffer(), type: r.headers.get('content-type') || '', name: decodeURIComponent(r.headers.get('x-filename') || ''), via: '튜터봇 서버' };
@@ -1282,6 +1288,18 @@ async function fetchBytes(target) {
   const body = await r.text();
   return { reader: true, title: (body.match(/^Title:\s*(.+)$/m) || [])[1] || '', text: body.replace(/^(Title|URL Source|Published Time|Markdown Content):.*$/gm, '').trim(), via: '공개 리더' };
 }
+// 주소(웹 페이지·구글 드라이브)에서 글자를 가져옴 — 처음 불러오기와 새로고침이 함께 씀
+async function loadFromUrl(url) {
+  const drive = driveLink(url);
+  const res = await fetchBytes(drive ? drive.url : url);
+  let got;
+  if (res.reader) got = { title: res.title, text: res.text, kind: '텍스트' };
+  else { got = await bytesToText(res.buf, res.type, res.name); got.title = got.title || (res.name || '').replace(/\.[^.]+$/, ''); }
+  if (!got.text || got.text.length < 30) {
+    throw new Error(drive ? '글자를 거의 찾지 못했습니다. 공유 설정이 「링크가 있는 모든 사용자」인지, 스캔 이미지 PDF가 아닌지 확인하세요' : '본문 글자를 거의 찾지 못했습니다. TEXT 탭에 붙여넣어 주세요');
+  }
+  return { ...got, text: got.text.slice(0, 200000), via: res.via, drive };
+}
 $('addUrl').onclick = async () => {
   const url = $('urlInput').value.trim(), st = $('urlStatus');
   if (!/^https?:\/\/\S+$/i.test(url)) { setNote(st, 'fail', '✘ http:// 또는 https:// 로 시작하는 주소를 넣으세요.'); return; }
@@ -1289,38 +1307,63 @@ $('addUrl').onclick = async () => {
   const btn = $('addUrl');
   btn.disabled = true;
   setNote(st, 'info', drive ? `⏳ ${drive.type}을 내려받는 중…` : '⏳ 페이지를 읽는 중…');
-  let got = null, via = '';
   try {
-    const res = await fetchBytes(drive ? drive.url : url);
-    via = res.via;
-    if (res.reader) got = { title: res.title, text: res.text, kind: '텍스트' };
-    else got = await bytesToText(res.buf, res.type, res.name), got.title = got.title || (res.name || '').replace(/\.[^.]+$/, '');
+    const got = await loadFromUrl(url);
+    const name = $('urlName').value.trim() || got.title?.slice(0, 60) || (drive ? `${drive.type} ${drive.id.slice(0, 6)}` : new URL(url).hostname);
+    addMaterial({ name, kind: 'url', src: url, text: got.text, loadedAt: nowISO() });
+    setNote(st, 'ok', `✔ 「${name}」 ${got.text.length.toLocaleString()}자를 불러왔습니다 (${drive ? `${drive.type} · ` : ''}${got.kind || ''} · ${got.via} 읽기).`);
+    $('urlInput').value = ''; $('urlName').value = '';
   } catch (e) {
-    setNote(st, 'fail', `✘ 읽지 못했습니다 — ${e.message}.${drive ? ' 구글 드라이브는 공유 설정을 「링크가 있는 모든 사용자 · 뷰어」로 해 주세요.' : ' 본문을 복사해 TEXT 탭에 붙여넣으세요.'}`);
+    setNote(st, 'fail', `✘ 읽지 못했습니다 — ${e.message}.${drive ? ' 구글 드라이브는 공유 설정을 「링크가 있는 모든 사용자 · 뷰어」로 해 주세요.' : ''}`);
+  } finally { btn.disabled = false; }
+};
+
+// ---------- URL·구글 드라이브 자료 다시 불러오기 ----------
+const urlMats = () => S.materials.filter(m => m.kind === 'url' && /^https?:\/\//i.test(m.src));
+async function refreshUrlMaterials(list) {
+  const st = $('refreshStatus'), btn = $('refreshUrls');
+  if (!list.length) return;
+  btn.disabled = true;
+  document.querySelectorAll('[data-mat="reload"]').forEach(b => { b.disabled = true; });
+  const changed = [], same = [], failed = [];
+  for (let i = 0; i < list.length; i++) {
+    const m = list[i];
+    setNote(st, 'info', `⏳ 다시 불러오는 중 (${i + 1}/${list.length}) — 「${m.name}」`);
+    try {
+      const got = await loadFromUrl(m.src);
+      if (got.text === m.text) same.push(m.name);
+      else { changed.push(`${m.name} (${(got.text.length - m.text.length >= 0 ? '+' : '')}${(got.text.length - m.text.length).toLocaleString()}자)`); m.text = got.text; }
+      m.loadedAt = nowISO();
+    } catch (e) { failed.push(`${m.name}: ${e.message}`); }
   }
   btn.disabled = false;
-  if (!got) return;
-  if (!got.text || got.text.length < 30) {
-    setNote(st, 'fail', drive ? '✘ 글자를 거의 찾지 못했습니다. 공유 설정이 「링크가 있는 모든 사용자」인지, 스캔 이미지 PDF가 아닌지 확인하세요.' : '✘ 본문 글자를 거의 찾지 못했습니다. TEXT 탭에 붙여넣어 주세요.');
-    return;
-  }
-  const name = $('urlName').value.trim() || got.title?.slice(0, 60) || (drive ? `${drive.type} ${drive.id.slice(0, 6)}` : new URL(url).hostname);
-  addMaterial({ name, kind: 'url', src: url, text: got.text.slice(0, 200000) });
-  setNote(st, 'ok', `✔ 「${name}」 ${got.text.length.toLocaleString()}자를 불러왔습니다 (${drive ? `${drive.type} · ` : ''}${got.kind || ''} · ${via} 읽기).`);
-  $('urlInput').value = ''; $('urlName').value = '';
-};
+  materialsChanged(); // 저장·학생 화면 자동 반영 (온라인 배포는 reference json을 다시 올려야 함)
+  const lines = [
+    changed.length ? `✔ 바뀐 자료 ${changed.length}개: ${changed.join(', ')}` : '',
+    same.length ? `· 그대로인 자료 ${same.length}개` : '',
+    ...failed.map(f => `✘ ${f}`),
+    changed.length && serverOK === false ? `→ 온라인 학생 화면에 반영하려면 「${REF_FILE} ↓」을 다시 받아 올리세요.` : ''
+  ].filter(Boolean);
+  setNote(st, failed.length && !changed.length && !same.length ? 'fail' : changed.length ? 'ok' : 'info', lines.join('\n') || '다시 불러올 자료가 없습니다.');
+  st.style.whiteSpace = 'pre-line';
+}
+$('refreshUrls').onclick = () => refreshUrlMaterials(urlMats());
 
 function renderMaterials() {
   const mats = activeMaterials(), sample = !S.materials.length;
   $('matCount').textContent = `${mats.length}개${sample ? ' (샘플)' : ''}`;
+  const nUrl = STUDENT ? 0 : urlMats().length;
+  $('refreshRow').classList.toggle('hidden', !nUrl);
+  $('refreshCount').textContent = nUrl ? `${nUrl}개` : '';
   $('matList').innerHTML = mats.map((m, i) => `
     <li class="glass-chip rounded-2xl px-3.5 py-2.5 flex items-center gap-2.5 min-w-0">
       <span class="shrink-0 sunk rounded-full px-2 py-0.5 text-[10px] font-bold text-mute">${KIND_LABEL[m.kind]}</span>
       <span class="min-w-0 flex-1">
         <span class="block text-sm font-medium truncate" title="${esc(m.name)}">${esc(m.name)}</span>
-        <span class="block text-[11px] text-mute truncate">${m.text.length.toLocaleString()}자${m.src ? ` · ${esc(m.src)}` : ''}</span>
+        <span class="block text-[11px] text-mute truncate">${m.text.length.toLocaleString()}자${m.loadedAt ? ` · ${fmtDT(m.loadedAt)} 불러옴` : ''}${m.src ? ` · ${esc(m.src)}` : ''}</span>
       </span>
       <button type="button" class="pill px-2.5 py-1 text-[11px]" data-mat="view" data-i="${i}">보기</button>
+      ${!STUDENT && !sample && m.kind === 'url' && /^https?:/i.test(m.src) ? `<button type="button" class="pill px-2.5 py-1 text-[11px]" data-mat="reload" data-i="${i}" title="이 자료만 다시 불러오기" aria-label="${esc(m.name)} 다시 불러오기">↻</button>` : ''}
       ${STUDENT || sample ? '' : `<button type="button" class="pill px-2.5 py-1 text-[11px]" data-mat="rename" data-i="${i}">이름</button>
       <button type="button" class="pill px-2.5 py-1 text-[11px]" data-mat="del" data-i="${i}" aria-label="${esc(m.name)} 삭제">✕</button>`}
     </li>`).join('');
@@ -1330,6 +1373,7 @@ $('matList').onclick = e => {
   if (!b) return;
   const m = activeMaterials()[+b.dataset.i];
   if (b.dataset.mat === 'view') openSource(m, null);
+  else if (b.dataset.mat === 'reload') refreshUrlMaterials([m]);
   else if (b.dataset.mat === 'rename') {
     const n = prompt('자료 이름', m.name);
     if (n && n.trim()) { m.name = n.trim().slice(0, 80); materialsChanged(); }
