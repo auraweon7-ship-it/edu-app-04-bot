@@ -409,6 +409,7 @@
           <span class="text-xs font-bold">📡 학생 화면</span>
           <span id="publishStatus" class="text-[11px] text-mute flex-1 min-w-0">자료·강의 정보·답변 규칙을 바꾸면 자동으로 반영됩니다</span>
           <button id="publishBtn" type="button" class="pill px-3 py-1 text-[11px]">지금 반영</button>
+          <button id="refJsonBtn" type="button" class="pill px-3 py-1 text-[11px]" title="GitHub 저장소(index.html 옆)에 올리면 온라인 학생 화면이 이 자료로 답합니다">reference.json ↓</button>
         </div>
         <label class="block" data-prof><span class="block text-xs font-bold mb-1.5">히스토리 이름 (교과목·주제)</span>
           <input id="histTitle" type="text" class="field" placeholder="비우면 첫 수업자료 이름을 씁니다 (예: 3주차 개혁개방)"></label>
@@ -620,6 +621,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.10.0 온라인(GitHub Pages) 배포 지원: 앱 옆의 reference.json을 학생 화면이 읽음, 교수 화면에 「reference.json ↓」, 정적 호스팅에서는 405 대신 안내
 // v1.9.2  교수 화면이 튜터봇 서버에서 열렸는지 확인(/api/ping)하고 아니면 열어야 할 주소 안내, 오류에 요청 주소 표시, 서버 창에 요청 기록
 // v1.9.1  학생 화면 반영 HTTP 405 오류 고침: API 주소를 사이트 루트(/api/…)로, 서버는 경로가 붙어도 API로 처리
 // v1.9.0  답변을 「📚 수업자료」+「🤖 AI 분석」 두 부분으로 구성(힌트 단계 포함), 두 머리글을 구분선으로 표시
@@ -644,7 +646,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.9.2';
+const APP_VERSION = 'v1.10.0';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -661,16 +663,21 @@ const PROF_SESSION = 'tutorbot-prof';
 const PROF = !FILE_DEPLOY && (() => { try { return sessionStorage.getItem(PROF_SESSION) === '1' && !!sessionStorage.getItem('tutorbot-token'); } catch { return false; } })();
 // 앱을 서버(node server.js)로 열었는지: 그렇다면 교수 모드에서 게시한 자료를 학생 화면이 서버에서 받음
 const SERVER = /^https?:$/.test(location.protocol);
+// 게시 자료 찾기: ① 튜터봇 서버(/api/deploy) ② 앱과 같은 폴더의 reference.json (GitHub Pages 등 정적 호스팅)
+const REF_FILE = 'reference.json';
 function fetchPublished() {
   if (!SERVER) return null;
-  try {
-    const x = new XMLHttpRequest();
-    x.open('GET', '/api/deploy', false); // 시작 전에 자료가 있어야 하므로 동기 요청 (작은 JSON 한 번)
-    x.send();
-    if (x.status !== 200) return null;
-    const d = JSON.parse(x.responseText);
-    return Array.isArray(d?.materials) ? d : null;
-  } catch { return null; }
+  for (const url of ['/api/deploy', REF_FILE]) {
+    try {
+      const x = new XMLHttpRequest();
+      x.open('GET', url + (url === REF_FILE ? `?t=${Date.now()}` : ''), false); // 시작 전에 자료가 있어야 하므로 동기 요청 (작은 JSON)
+      x.send();
+      if (x.status !== 200) continue;
+      const d = JSON.parse(x.responseText);
+      if (Array.isArray(d?.materials)) return { ...d, _src: url };
+    } catch {}
+  }
+  return null;
 }
 // 학생 화면(서버로 연 앱): 교수님이 켠 AI가 있으면 교수 키로 서버를 거쳐 답함 (키는 학생에게 오지 않음)
 const SERVER_AI = !FILE_DEPLOY && !PROF && SERVER ? (() => {
@@ -684,7 +691,7 @@ const SERVER_AI = !FILE_DEPLOY && !PROF && SERVER ? (() => {
 })() : null;
 const DEPLOY = FILE_DEPLOY || (PROF ? null : (() => {
   const pub = fetchPublished();
-  if (pub) return { id: 'server', title: pub.course?.course || pub.title || '04 AI 학습용 챗봇', course: pub.course || {}, materials: pub.materials, rules: pub.rules || {}, updatedAt: pub.updatedAt };
+  if (pub) return { id: pub._src === REF_FILE ? 'github' : 'server', title: pub.course?.course || pub.title || '04 AI 학습용 챗봇', course: pub.course || {}, materials: pub.materials, rules: pub.rules || {}, updatedAt: pub.updatedAt };
   let s = null;
   try { s = JSON.parse(localStorage.getItem('tutorbot-settings') || 'null'); } catch {}
   return { id: 'local', title: s?.course?.course || '04 AI 학습용 챗봇', course: s?.course || {}, materials: Array.isArray(s?.materials) ? s.materials : [], rules: s?.rules || {} };
@@ -2304,7 +2311,8 @@ function schedulePublish(delay = 1500) {
 }
 async function publishNow() {
   clearTimeout(publishTimer);
-  if (serverOK === false) return checkServer();
+  if (serverOK === null) await checkServer();
+  if (serverOK === false) return;
   let token = '';
   try { token = sessionStorage.getItem(PROF_TOKEN) || ''; } catch {}
   if (!token) { setPublishStatus('fail', '⚠ 다시 로그인해야 학생 화면에 반영됩니다 (로그아웃 → 로그인).'); return; }
@@ -2326,11 +2334,24 @@ async function checkServer() {
   if (!PROF || !SERVER) return;
   try { const r = await fetch('/api/ping', { cache: 'no-store' }); serverOK = r.ok && (await r.json()).app === 'tutorbot'; } catch { serverOK = false; }
   if (!serverOK) {
-    const msg = `⚠ 지금 주소(${location.origin})는 튜터봇 서버가 아닙니다. 서버 창에서 node server.js를 실행한 뒤, 그 창에 나온 주소(예: http://192.168.0.68:8765)로 이 화면을 여세요.`;
-    setPublishStatus('fail', msg);
-    setShareStatus('fail', msg);
+    const gh = /.github.io$/i.test(location.hostname);
+    setPublishStatus('info', gh
+      ? '온라인(GitHub Pages) 배포: 「reference.json ↓」로 받은 파일을 GitHub 저장소의 index.html 옆에 올리면 학생 화면에 반영됩니다(1~10분).'
+      : `이 주소(${location.origin})는 자동 반영 서버가 아닙니다. 「reference.json ↓」 파일을 앱(index.html) 옆에 올리거나, node server.js 주소로 여세요.`);
+    setShareStatus('info', '서버가 없는 온라인 배포(GitHub Pages)에서는 교수님 키를 학생 화면과 나눌 수 없습니다. 키를 웹에 올리면 누구나 가져가 쓸 수 있기 때문입니다. 학생 화면은 샘플 모드로 답합니다.');
   }
 }
+$('refJsonBtn').onclick = () => {
+  if (!activeMaterials().length) { toast('참고자료가 없습니다.'); return; }
+  const data = { app: 'TUTORBOT', type: 'tutorbot-reference', version: APP_VERSION, updatedAt: nowISO(), ...JSON.parse(publishPayload()) };
+  const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = REF_FILE; // GitHub에 올릴 때 이름이 정확히 reference.json이어야 함
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  toast('reference.json을 내려받았습니다. GitHub 저장소의 index.html 옆에 올리세요.');
+};
 
 // ---------- 학생 화면 AI: 교수 키를 서버에 맡김 ----------
 var lastAIShare = '', aiShareTimer = null;
@@ -2344,6 +2365,7 @@ function scheduleAIShare(delay = 1200) {
   aiShareTimer = setTimeout(shareAINow, delay);
 }
 async function shareAINow() {
+  if (serverOK === null) await checkServer();
   if (serverOK === false) return;
   let token = '';
   try { token = sessionStorage.getItem(PROF_TOKEN) || ''; } catch {}
@@ -2365,7 +2387,8 @@ var publishedAt = DEPLOY?.updatedAt || '';
 async function refreshPublished() {
   if (!STUDENT || FILE_DEPLOY || !SERVER || busy) return;
   try {
-    const r = await fetch('/api/deploy', { cache: 'no-store' });
+    let r = await fetch('/api/deploy', { cache: 'no-store' });
+    if (!r.ok) r = await fetch(`${REF_FILE}?t=${Date.now()}`, { cache: 'no-store' });
     if (!r.ok) return;
     const d = await r.json();
     if (!Array.isArray(d?.materials) || d.updatedAt === publishedAt) return;
