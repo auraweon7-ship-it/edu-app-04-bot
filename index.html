@@ -620,6 +620,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.9.2  교수 화면이 튜터봇 서버에서 열렸는지 확인(/api/ping)하고 아니면 열어야 할 주소 안내, 오류에 요청 주소 표시, 서버 창에 요청 기록
 // v1.9.1  학생 화면 반영 HTTP 405 오류 고침: API 주소를 사이트 루트(/api/…)로, 서버는 경로가 붙어도 API로 처리
 // v1.9.0  답변을 「📚 수업자료」+「🤖 AI 분석」 두 부분으로 구성(힌트 단계 포함), 두 머리글을 구분선으로 표시
 // v1.8.4  AI 답변을 더 구체적으로: 첫 문장에 직접 답, 자료가 목록뿐이면 학술 지식으로 보충(📎 보충 설명), 보통·자세히 길이 늘림
@@ -643,7 +644,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.9.1';
+const APP_VERSION = 'v1.9.2';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -2303,6 +2304,7 @@ function schedulePublish(delay = 1500) {
 }
 async function publishNow() {
   clearTimeout(publishTimer);
+  if (serverOK === false) return checkServer();
   let token = '';
   try { token = sessionStorage.getItem(PROF_TOKEN) || ''; } catch {}
   if (!token) { setPublishStatus('fail', '⚠ 다시 로그인해야 학생 화면에 반영됩니다 (로그아웃 → 로그인).'); return; }
@@ -2314,10 +2316,21 @@ async function publishNow() {
     lastPublished = body;
     setPublishStatus('ok', `● 학생 화면에 반영됨 · 자료 ${b.materials}개 · ${fmtTime(b.updatedAt)}`);
   } catch (e) {
-    setPublishStatus('fail', `⚠ 학생 화면에 반영하지 못했습니다 — ${e.message}${/Failed to fetch|404|405/.test(e.message) ? ' (node server.js로 실행했는지 확인)' : ''}`);
+    setPublishStatus('fail', `⚠ 학생 화면에 반영하지 못했습니다 — ${e.message}${/Failed to fetch|404|405|501/.test(e.message) ? ` · 요청 주소 ${location.origin}/api/deploy — 이 주소가 node server.js 창에 나온 주소와 같은지 확인` : ''}`);
   }
 }
 $('publishBtn').onclick = () => { lastPublished = ''; publishNow(); };
+// 지금 페이지를 연 곳이 튜터봇 서버(node server.js)인지 확인: 다른 웹 서버(Live Server 등)로 열면 저장이 405로 막힘
+var serverOK = null;
+async function checkServer() {
+  if (!PROF || !SERVER) return;
+  try { const r = await fetch('/api/ping', { cache: 'no-store' }); serverOK = r.ok && (await r.json()).app === 'tutorbot'; } catch { serverOK = false; }
+  if (!serverOK) {
+    const msg = `⚠ 지금 주소(${location.origin})는 튜터봇 서버가 아닙니다. 서버 창에서 node server.js를 실행한 뒤, 그 창에 나온 주소(예: http://192.168.0.68:8765)로 이 화면을 여세요.`;
+    setPublishStatus('fail', msg);
+    setShareStatus('fail', msg);
+  }
+}
 
 // ---------- 학생 화면 AI: 교수 키를 서버에 맡김 ----------
 var lastAIShare = '', aiShareTimer = null;
@@ -2331,6 +2344,7 @@ function scheduleAIShare(delay = 1200) {
   aiShareTimer = setTimeout(shareAINow, delay);
 }
 async function shareAINow() {
+  if (serverOK === false) return;
   let token = '';
   try { token = sessionStorage.getItem(PROF_TOKEN) || ''; } catch {}
   const body = aiSharePayload(), off = body === 'off';
@@ -2342,7 +2356,7 @@ async function shareAINow() {
     setShareStatus(off ? 'info' : 'ok', off
       ? (S.shareAI ? '키를 넣으면 학생 화면도 AI로 답합니다. 지금 학생 화면은 샘플 모드입니다.' : '꺼짐 — 학생 화면은 샘플 모드로 답합니다.')
       : `● 학생 화면 AI 켜짐 · ${b.provider ? PROVIDERS[b.provider].name : ''} ${b.model || ''} · 비용은 교수님 계정으로 청구`);
-  } catch (e) { setShareStatus('fail', `⚠ 학생 화면 AI 설정을 저장하지 못했습니다 — ${e.message}`); }
+  } catch (e) { setShareStatus('fail', `⚠ 학생 화면 AI 설정을 저장하지 못했습니다 — ${e.message}${/Failed to fetch|404|405|501/.test(e.message) ? ` · 요청 주소 ${location.origin}/api/ai — 이 주소가 node server.js 창에 나온 주소와 같은지 확인` : ''}`); }
 }
 $('shareAI').onchange = () => { S.shareAI = $('shareAI').checked; saveSettings(); };
 
@@ -2371,7 +2385,7 @@ fitChat();
 growAsk();
 if (!chips.length) scheduleChips(0);
 else { const lastBot = [...messages].reverse().find(m => m.role === 'assistant'); if (!lastBot && aiMode()) scheduleChips(0); }
-if (PROF) { schedulePublish(300); $('shareAI').checked = S.shareAI; scheduleAIShare(300); }
+if (PROF) { checkServer(); schedulePublish(300); $('shareAI').checked = S.shareAI; scheduleAIShare(300); }
 </script>
 </body>
 </html>
