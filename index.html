@@ -157,15 +157,14 @@
   /* 학생용 배포 파일: 편집 패널 숨김 */
   .is-student [data-prof] { display: none !important; }
   /* 챗봇 HTML: 채팅 카드만 화면에 표시 (머리말·패널·꼬리말 숨김) */
-  .is-student #hdr, .is-student #panel { display: none !important; }
+  .is-student #panel, .is-student #openPanel, .is-student #openSettings { display: none !important; }
   /* 학생 화면: 꼬리말은 채팅 아래에 작게 보이도록 (채팅 높이에서 꼬리말 높이를 뺌) */
   .is-student footer { margin-top: 0; }
   .is-student footer > div { padding-top: .75rem; padding-bottom: calc(.75rem + env(safe-area-inset-bottom)); }
-  /* 학생 화면: 추천 질문 칩 숨김 */
-  .is-student #chips, .is-student #refreshChips, .is-student #chipStatus { display: none !important; }
+  @media (max-width: 639px) { .is-student footer > div { flex-direction: row; flex-wrap: wrap; gap: .1rem .75rem; font-size: 10px; padding-top: .5rem; padding-bottom: calc(.5rem + env(safe-area-inset-bottom)); } }
   .is-student main { max-width: 56rem; grid-template-columns: minmax(0, 1fr) !important; padding-top: 1rem; padding-bottom: 1rem; }
-  .is-student #chatCard { position: static; height: calc(100dvh - 2rem - var(--ft-h, 4rem)); max-height: none; }
-  @media (max-width: 639px) { .is-student main { padding-top: 0; padding-bottom: 0; } .is-student #chatCard { height: calc(100dvh - var(--ft-h, 5rem)); } }
+  .is-student #chatCard { position: static; height: calc(100dvh - 2rem - var(--ft-h, 4rem) - var(--hd-h, 5rem)); max-height: none; }
+  @media (max-width: 639px) { .is-student main { padding-top: 0; padding-bottom: 0; } .is-student #chatCard { height: calc(100dvh - var(--ft-h, 5rem) - var(--hd-h, 4rem)); } }
   body:not(.is-student) [data-student] { display: none !important; }
   /* 화면 배치: 넓은 화면은 2단, 휴대폰·태블릿은 채팅 전체 화면 (패널은 버튼으로 열기) */
   @media (min-width: 1024px) {
@@ -499,7 +498,7 @@
     <div class="flex items-center gap-3 px-4 py-3" style="border-bottom:1px solid rgba(0,0,0,.07);box-shadow:0 1px 0 #fff">
       <div class="avatar" aria-hidden="true">T</div>
       <div class="min-w-0 flex-1">
-        <p class="text-sm font-bold leading-snug break-words sm:truncate" id="chatTitle">튜터봇</p>
+        <p class="text-sm font-bold leading-snug truncate" id="chatTitle">튜터봇</p>
         <p class="text-[11px] font-medium leading-snug break-words sm:truncate" id="chatCourse"></p>
         <p class="text-[11px] text-mute truncate" id="chatSub"></p>
       </div>
@@ -632,6 +631,8 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.12.1 휴대폰 학생 화면: 채팅 제목 한 줄, 꼬리말 작게
+// v1.12.0 학생 화면을 교수 채팅과 같게: 머리말·추천 질문·출처 칩·AI 기능 모두 표시, 교수용 왼쪽 패널과 자료·AI 설정 버튼만 숨김
 // v1.11.1 학생 화면 하단에 꼬리말(저작권·교수명) 표시, 채팅 높이를 꼬리말만큼 줄여 한 화면에 보이게
 // v1.11.0 온라인(GitHub Pages) 학생 화면도 AI 답변: Cloudflare Workers 중계 서버(worker/worker.js)에 키를 비밀 값으로 두고, 교수 설정에 중계 주소·확인, 주소는 reference.json에 담김
 // v1.10.1 샘플 모드 답변 개선: 드문 낱말에 무게(흔한 말 무시), 자료 안내·과제 문장 감점, 앞뒤 맥락 문장 포함, 「AI 연결되면」 안내 문구 삭제
@@ -660,7 +661,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.11.1';
+const APP_VERSION = 'v1.12.1';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -858,7 +859,6 @@ if (STUDENT) {
   const saved = store.get(KEY_CHAT, null);
   if (Array.isArray(saved?.messages)) messages = saved.messages.filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string');
   if (Array.isArray(saved?.chips)) chips = saved.chips.filter(c => typeof c === 'string').slice(0, 6);
-  if (STUDENT) messages.forEach(m => { m.sources = []; }); // 학생 화면: 예전 대화의 출처 연결도 지움
 }
 
 // ---------- 샘플 강의계획서 · 수업자료 ----------
@@ -1640,7 +1640,6 @@ async function ask(text, { stage = 1, hint = false, regen = false, q = null } = 
     else { bot.error = true; bot.text = `${bot.text ? bot.text + '\n\n' : ''}⚠ 답변을 받지 못했어요 — ${e.message}`; }
   } finally {
     if (user) user.read = true;
-    if (STUDENT) bot.sources = []; // 학생 화면: 교수 자료 출처(원문 연결)를 보여 주지 않음
     bot.streaming = false;
     if (!bot.text.trim()) bot.text = '(답변을 중지했습니다)';
     else if (bot.stopped) bot.text += '\n\n(중지됨)';
@@ -1731,7 +1730,7 @@ function msgHTML(m, isLast) {
     else acts.push(`<span class="text-[11px] text-mute self-center">정답 공개는 교수 설정으로 꺼져 있어요</span>`);
   }
   if (isLast && !m.streaming) acts.push(`<button type="button" class="pill px-3 py-1 text-[11px]" data-act="regen">↻ 다시 생성</button>`);
-  const srcs = !STUDENT && m.sources?.length ? `<div class="mt-1.5 flex flex-wrap items-center gap-1.5 min-w-0"><span class="text-[10px] font-bold text-mute">출처</span>${m.sources.map((s, i) =>
+  const srcs = m.sources?.length ? `<div class="mt-1.5 flex flex-wrap items-center gap-1.5 min-w-0"><span class="text-[10px] font-bold text-mute">출처</span>${m.sources.map((s, i) =>
     `<button type="button" class="src-chip" data-act="src" data-i="${i}" title="${esc(s.doc)} — ${esc(s.quote)}"><span class="ic" aria-hidden="true">§</span><b>${esc(s.doc)}</b><span class="q">“${esc(s.quote)}”</span></button>`).join('')}</div>` : '';
   return `<div class="flex items-start gap-2 pr-4 sm:pr-10" data-mid="${m.id}">
     <div class="avatar" aria-hidden="true">T</div>
@@ -1748,8 +1747,8 @@ function msgHTML(m, isLast) {
 function welcomeHTML() {
   const friendly = S.rules.tone === 'friendly', name = S.course.course || (STUDENT ? DEPLOY.title : '') || '이 강의';
   const t = friendly
-    ? `안녕하세요! 👋 **${name}** 튜터봇이에요.\n강의계획서와 수업자료를 근거로 답해 드려요. 자료에 없는 내용이면 솔직하게 알려 드릴게요.\n- 📘 **설명 모드**: 답을 바로 설명\n- 🧩 **힌트 모드**: 되물으며 스스로 답을 찾도록 도움\n${STUDENT ? '아래 입력창에 궁금한 점을 적어 보세요.' : '아래 추천 질문을 눌러 시작해 보세요.'}`
-    : `안녕하십니까. **${name}** 튜터봇입니다.\n강의계획서와 수업자료를 근거로 답변드리며, 자료에 없는 내용은 그 사실을 먼저 밝힙니다.\n- 📘 **설명 모드**: 답을 바로 설명\n- 🧩 **힌트 모드**: 단계별 힌트로 스스로 답에 이르도록 도움\n${STUDENT ? '아래 입력창에 질문을 적어 주십시오.' : '아래 추천 질문으로 시작해 보십시오.'}`;
+    ? `안녕하세요! 👋 **${name}** 튜터봇이에요.\n강의계획서와 수업자료를 근거로 답해 드려요. 자료에 없는 내용이면 솔직하게 알려 드릴게요.\n- 📘 **설명 모드**: 답을 바로 설명\n- 🧩 **힌트 모드**: 되물으며 스스로 답을 찾도록 도움\n아래 추천 질문을 누르거나 궁금한 점을 적어 보세요.`
+    : `안녕하십니까. **${name}** 튜터봇입니다.\n강의계획서와 수업자료를 근거로 답변드리며, 자료에 없는 내용은 그 사실을 먼저 밝힙니다.\n- 📘 **설명 모드**: 답을 바로 설명\n- 🧩 **힌트 모드**: 단계별 힌트로 스스로 답에 이르도록 도움\n아래 추천 질문을 누르거나 질문을 적어 주십시오.`;
   return `<div class="flex items-start gap-2 pr-4 sm:pr-10"><div class="avatar" aria-hidden="true">T</div><div class="min-w-0 flex-1">
     <p class="text-[11px] font-bold mb-1">튜터봇</p>
     <div class="bubble bubble-bot max-w-[88%]"><div class="md">${md(t)}</div>${aiMode() ? '' : `<p class="mt-2 text-[11px] text-mute">지금은 API 키 없이 <b>샘플 모드</b>로 작동해요. ${STUDENT ? '수업자료에서 근거 문장을 찾아 답합니다.' : '⚙ 버튼에서 키를 넣으면 AI가 답합니다.'}</p>`}</div>
@@ -1857,7 +1856,6 @@ const matsHash = () => { let h = 0; const s = S.provider + S.rules.lang + active
 let chipTimer = null, chipSeq = 0;
 function scheduleChips(delay = 900) { clearTimeout(chipTimer); chipTimer = setTimeout(() => genChips(false), delay); }
 async function genChips(force) {
-  if (STUDENT) return; // 학생 화면은 추천 질문을 쓰지 않음 (AI 비용도 아낌)
   const seq = ++chipSeq;
   if (!aiMode()) { chips = sampleChips(); renderChips(); setChipStatus(''); saveChat(); return; }
   const cached = store.get(KEY_CHIPS, null);
@@ -2293,7 +2291,10 @@ $('openPanel').onclick = () => document.body.classList.contains('panel-open') ? 
 $('closePanel').onclick = () => { closePanel(); $('ask').focus({ preventScroll: true }); };
 function fitChat() {
   const card = $('chatCard');
-  if (STUDENT) document.documentElement.style.setProperty('--ft-h', `${document.querySelector('footer').offsetHeight}px`);
+  if (STUDENT) {
+    document.documentElement.style.setProperty('--ft-h', `${document.querySelector('footer').offsetHeight}px`);
+    document.documentElement.style.setProperty('--hd-h', `${$('hdr').offsetHeight}px`);
+  }
   if (innerWidth >= 1024 || STUDENT && innerWidth >= 640) { card.style.height = ''; return; }
   const vv = window.visualViewport, h = vv ? vv.height : innerHeight;
   const typing = document.activeElement === $('ask') && vv && vv.height < innerHeight * 0.85;
