@@ -357,6 +357,27 @@
       </div>
     </div>
 
+    <!-- 교과목 등록 -->
+    <div class="space-y-3" data-prof>
+      <button type="button" class="sec-head sec-toggle w-full text-left" aria-expanded="true" aria-controls="body-courses" data-collapse="courses">
+        📘 COURSES <small>—— 교과목 등록 · 학생이 골라서 채팅</small>
+        <span class="ml-auto flex items-center gap-2 min-w-0"><span class="sec-sum" id="sum-courses"></span><span class="chev" aria-hidden="true"></span></span>
+      </button>
+      <div id="body-courses" class="space-y-3">
+        <p class="text-[11px] text-mute leading-5">지금 편집 중인 과목: <b id="courseNowName" class="text-ink"></b> <span id="courseCodeNow" class="sunk rounded-full px-2 py-0.5 font-disp font-semibold"></span><br>과목마다 자료·강의 정보·답변 규칙·학생 대화가 따로 저장됩니다. AI 키는 모든 과목이 함께 씁니다.</p>
+        <div class="grid grid-cols-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] gap-2">
+          <input id="regCode" type="text" spellcheck="false" autocomplete="off" class="field !py-2 text-xs font-disp" placeholder="코드 (예: lit2026)" aria-label="과목 코드 (영문 소문자·숫자)">
+          <input id="regName" type="text" autocomplete="off" class="field !py-2 text-xs" placeholder="과목명 (예: 중국현대문학사)" aria-label="과목명">
+          <button id="regAdd" type="button" class="pill pill-dark px-4 py-2 text-xs col-span-2 sm:col-span-1">교과목 등록</button>
+        </div>
+        <ul id="courseList" class="space-y-2"></ul>
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="coursesJsonBtn" type="button" class="pill px-3 py-1 text-[11px]" title="GitHub·Vercel에 올리면 학생 화면의 교과목 목록이 됩니다">courses.json ↓</button>
+          <span id="coursesStatus" class="text-[11px] text-mute flex-1 min-w-0 leading-5"></span>
+        </div>
+      </div>
+    </div>
+
     <!-- 강의 정보 -->
     <div class="space-y-3">
       <button type="button" class="sec-head sec-toggle w-full text-left" aria-expanded="true" aria-controls="body-course" data-collapse="course">
@@ -442,18 +463,6 @@
           <button id="saveHist" type="button" class="pill pill-dark px-5 py-2.5 text-sm">히스토리 저장</button>
           <button id="dlStudent" type="button" class="pill px-5 py-2.5 text-sm" title="참고자료와 답변 규칙을 담아 학생에게 나눠 줄 챗봇 파일">챗봇 HTML ↓</button>
           <button id="cancelEdit" type="button" class="link hidden self-center">수정 취소</button>
-        </div>
-        <div class="glass-chip rounded-2xl px-3.5 py-2.5 space-y-2" data-prof>
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="text-xs font-bold">🏷 과목 코드</span>
-            <span id="courseCodeNow" class="sunk rounded-full px-2.5 py-0.5 text-[11px] font-disp font-semibold"></span>
-            <span class="text-[11px] text-mute">과목마다 자료·설정·학생 대화가 따로 저장됩니다</span>
-          </div>
-          <div class="flex gap-2">
-            <input id="courseCodeInput" type="text" spellcheck="false" autocomplete="off" class="field flex-1 !py-2 text-xs font-disp" placeholder="다른 과목 열기 — 예: lit2026 (영문·숫자)" aria-label="과목 코드">
-            <button id="courseCodeGo" type="button" class="pill px-3 text-[11px]">이 과목 열기</button>
-          </div>
-          <p class="text-[11px] text-mute leading-5">학생 주소: <span id="studentLink" class="font-disp text-ink break-all"></span> <button id="copyLink" type="button" class="link">복사</button></p>
         </div>
         <div class="glass-chip rounded-2xl px-3.5 py-2.5 flex flex-wrap items-center gap-2" data-prof>
           <span class="text-xs font-bold">📡 학생 화면</span>
@@ -542,7 +551,8 @@
         <p class="text-[11px] font-medium leading-snug truncate" id="chatCourse"></p>
         <p class="text-[11px] text-mute truncate" id="chatSub"></p>
       </div>
-      <div class="flex items-center gap-2 ml-auto">
+      <div class="flex items-center gap-2 ml-auto min-w-0">
+      <select id="courseSelect" class="field !w-auto max-w-[11rem] !py-1.5 !pl-3 !rounded-full text-xs hidden" aria-label="교과목 선택"></select>
       <button id="openLogin" type="button" class="pill h-9 px-3 text-xs hidden" aria-haspopup="dialog" aria-label="교수 로그인" title="교수 모드 로그인">🔒<span class="hidden sm:inline">교수</span></button>
       <button id="openSetup" type="button" class="pill h-9 px-3 text-xs" data-student aria-haspopup="dialog" aria-label="챗봇 설정">⚙<span class="hidden sm:inline">설정</span></button>
       <div class="relative">
@@ -600,6 +610,18 @@
     <p id="loginErr" class="hidden note-ng rounded-2xl px-3 py-2 text-xs" role="alert">비밀번호가 맞지 않습니다.</p>
     <button type="submit" class="pill pill-dark w-full py-2.5 text-sm">로그인</button>
   </form>
+</dialog>
+
+<!-- 교과목 선택 (학생) -->
+<dialog id="dlgCourse" aria-labelledby="pickTitle">
+  <div class="dlg glass rounded-[1.75rem] p-5 sm:p-6 w-[min(30rem,calc(100vw-1.5rem))] space-y-4">
+    <div>
+      <p class="text-[11px] font-bold text-mute tracking-wide font-disp">TUTORBOT</p>
+      <h2 id="pickTitle" class="text-lg font-bold">📘 교과목을 선택하세요</h2>
+      <p class="text-[11px] text-mute">선택한 과목의 강의계획서·수업자료로 튜터봇이 답합니다.</p>
+    </div>
+    <ul id="pickList" class="space-y-2"></ul>
+  </div>
 </dialog>
 
 <!-- 챗봇 파일 설정: 학생 정보 · AI 설정 (챗봇 HTML에서 패널 대신 사용) -->
@@ -673,6 +695,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.15.0 교과목 등록(교수: 📘 COURSES, 서버 자동 게시·courses.json), 학생은 교과목을 고른 뒤 채팅(첫 화면 선택 창·채팅 머리 선택 상자)
 // v1.14.1 모바일 반응형 보강: 입력칸 16px(아이폰 확대 방지), 터치 화면 버튼·칩 크기 키움, 휴대폰에서 표를 카드로, 노치 영역 여백, 대화상자 넓게
 // v1.14.0 여러 과목: 주소 ?c=과목코드로 과목 구분, reference-과목코드.json·과목별 서버 게시, 교수 설정·학생 대화 과목별 저장(AI 키는 공통), 교수 화면에 과목 코드·학생 주소
 // v1.13.0 Vercel 무료 배포 지원: vercel/api 함수(/api/ai·/api/chat)가 환경 변수 키로 학생 질문을 대신 보냄, 교수 화면에 Vercel 상태 표시
@@ -708,7 +731,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.14.1';
+const APP_VERSION = 'v1.15.0';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -855,7 +878,7 @@ const S = {
   course: { univ: '', dept: '', prof: '', course: '' },
   materials: [],
   rules: { mode: 'explain', tone: 'friendly', length: 'normal', lang: 'ko', reveal: true },
-  collapsed: { ai: false, course: false, ref: false, rules: false, hist: false },
+  collapsed: { ai: false, courses: false, course: false, ref: false, rules: false, hist: false },
   student: { name: '', dept: '', sid: '' },
   editingId: null
 };
@@ -1674,6 +1697,7 @@ function cleanSources(list) {
 async function ask(text, { stage = 1, hint = false, regen = false, q = null } = {}) {
   text = text.trim();
   if (busy || !text) return;
+  if (needCourse()) { openCoursePicker(); return; }
   if (!studentReady()) {
     toast('먼저 성명·학과·학번을 입력하세요.');
     openPanel();
@@ -2488,22 +2512,121 @@ async function checkServer() {
     } catch {}
   }
 }
-// 과목 코드 표시·바꾸기·학생 주소
-const studentURL = () => `${location.origin}${location.pathname}${courseQuery}`;
-$('refJsonBtn').textContent = `${REF_FILE} ↓`;
-$('courseCodeNow').textContent = COURSE_CODE || '기본 (코드 없음)';
-$('studentLink').textContent = studentURL();
-$('courseCodeGo').onclick = () => {
-  const code = $('courseCodeInput').value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32);
-  location.href = `${location.pathname}${code ? `?c=${code}` : ''}`;
-};
-$('courseCodeInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('courseCodeGo').click(); });
-$('copyLink').onclick = async () => {
-  const text = studentURL();
+// ---------- 교과목 등록 (교수) · 교과목 선택 (학생) ----------
+const COURSES_KEY = 'tutorbot-courses';
+const cleanCode = v => String(v || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32);
+const validCourses = list => Array.isArray(list) ? list.filter(c => c && cleanCode(c.code) && typeof c.name === 'string')
+  .map(c => ({ code: cleanCode(c.code), name: c.name.trim().slice(0, 60) || cleanCode(c.code) })) : [];
+const studentURL = code => `${location.origin}${location.pathname}${code ? `?c=${code}` : ''}`;
+const openCourse = code => { location.href = `${location.pathname}${code ? `?c=${code}` : ''}`; };
+// 학생 화면: 교수님이 게시한 목록(서버 → courses.json) → 없으면 이 브라우저의 등록 목록
+function fetchCoursesSync() {
+  if (!SERVER) return null;
+  for (const url of ['/api/courses', `courses.json?t=${Date.now()}`]) {
+    try {
+      const x = new XMLHttpRequest();
+      x.open('GET', url, false);
+      x.send();
+      if (x.status !== 200) continue;
+      const list = validCourses(JSON.parse(x.responseText)?.courses);
+      if (list.length) return list;
+    } catch {}
+  }
+  return null;
+}
+let courses = STUDENT && !FILE_DEPLOY ? (fetchCoursesSync() || validCourses(store.get(COURSES_KEY, []))) : validCourses(store.get(COURSES_KEY, []));
+// 등록된 교과목이 있는데 아직 고르지 않았으면 학생은 먼저 교과목을 선택
+const needCourse = () => STUDENT && !FILE_DEPLOY && courses.length > 0 && !courses.some(c => c.code === COURSE_CODE);
+const courseName = code => courses.find(c => c.code === code)?.name || '';
+async function copyText(text) {
   try { await navigator.clipboard.writeText(text); }
   catch { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
-  toast('학생 주소를 복사했습니다.');
+}
+
+function renderCourses() {
+  $('refJsonBtn').textContent = `${REF_FILE} ↓`;
+  $('courseNowName').textContent = courseName(COURSE_CODE) || S.course.course || (COURSE_CODE ? '(등록 안 됨)' : '기본 과목');
+  $('courseCodeNow').textContent = COURSE_CODE ? `?c=${COURSE_CODE}` : '코드 없음';
+  $('sum-courses').textContent = courses.length ? `${courses.length}개 과목${COURSE_CODE ? ` · 편집 중: ${courseName(COURSE_CODE) || COURSE_CODE}` : ''}` : '등록한 과목 없음';
+  $('courseList').innerHTML = courses.length ? courses.map((c, i) => {
+    const now = c.code === COURSE_CODE;
+    return `<li class="glass-chip rounded-2xl px-3.5 py-2.5 flex flex-wrap items-center gap-2"${now ? ' style="box-shadow:var(--raise-sm), inset 0 0 0 1.5px rgba(var(--accent),.5)"' : ''}>
+      <span class="min-w-0 flex-1"><b class="block text-sm truncate">${esc(c.name)}</b><span class="block text-[11px] text-mute font-disp truncate">?c=${esc(c.code)} · reference-${esc(c.code)}.json</span></span>
+      <button type="button" class="pill px-2.5 py-1 text-[11px]" data-cr="open" data-i="${i}"${now ? ' disabled' : ''}>${now ? '편집 중' : '열기'}</button>
+      <button type="button" class="pill px-2.5 py-1 text-[11px]" data-cr="copy" data-i="${i}">학생 주소</button>
+      <button type="button" class="pill px-2.5 py-1 text-[11px]" data-cr="del" data-i="${i}" aria-label="${esc(c.name)} 등록 삭제">✕</button></li>`;
+  }).join('') : '<li class="text-[11px] text-mute">아직 등록한 교과목이 없습니다. 코드와 과목명을 넣고 「교과목 등록」을 누르세요. 학생은 등록된 교과목 중에서 골라 채팅합니다.</li>';
+}
+function saveCourses() {
+  store.set(COURSES_KEY, courses);
+  renderCourses();
+  scheduleCoursesPublish();
+}
+$('regAdd').onclick = () => {
+  const code = cleanCode($('regCode').value), name = $('regName').value.trim() || (code === COURSE_CODE ? S.course.course : '');
+  if (!code) { toast('과목 코드를 영문 소문자·숫자로 넣으세요 (예: lit2026).'); $('regCode').focus(); return; }
+  if (!name) { toast('과목명을 넣으세요.'); $('regName').focus(); return; }
+  const i = courses.findIndex(c => c.code === code);
+  if (i >= 0) courses[i].name = name.slice(0, 60); else courses.push({ code, name: name.slice(0, 60) });
+  $('regCode').value = ''; $('regName').value = '';
+  saveCourses();
+  toast(i >= 0 ? `「${name}」 과목명을 바꿨습니다.` : `「${name}」(?c=${code})을 등록했습니다. 「열기」를 눌러 자료를 넣으세요.`);
 };
+$('regName').addEventListener('keydown', e => { if (e.key === 'Enter') $('regAdd').click(); });
+$('courseList').onclick = async e => {
+  const b = e.target.closest('[data-cr]');
+  if (!b) return;
+  const c = courses[+b.dataset.i];
+  if (b.dataset.cr === 'open') openCourse(c.code);
+  else if (b.dataset.cr === 'copy') { await copyText(studentURL(c.code)); toast(`학생 주소를 복사했습니다: ${studentURL(c.code)}`); }
+  else if (b.dataset.cr === 'del' && confirm(`「${c.name}」을 교과목 목록에서 뺄까요? (그 과목의 자료는 지워지지 않습니다)`)) { courses.splice(+b.dataset.i, 1); saveCourses(); }
+};
+// 교과목 목록 게시: 튜터봇 서버면 자동, 아니면 courses.json을 내려받아 올리기
+var coursesTimer = null, lastCourses = '';
+function scheduleCoursesPublish() {
+  if (!PROF || !SERVER) return;
+  clearTimeout(coursesTimer);
+  coursesTimer = setTimeout(async () => {
+    if (serverOK === null) await checkServer();
+    const body = JSON.stringify({ courses });
+    if (serverOK === false) { $('coursesStatus').textContent = '온라인(GitHub·Vercel) 배포: 「courses.json ↓」을 받아 index.html 옆에 올리면 학생 화면의 교과목 목록이 됩니다.'; return; }
+    if (body === lastCourses) return;
+    let token = '';
+    try { token = sessionStorage.getItem(PROF_TOKEN) || ''; } catch {}
+    try {
+      const r = await fetch('/api/courses', { method: 'PUT', headers: { 'content-type': 'application/json', 'x-tutorbot-token': token }, body });
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(b.error || `HTTP ${r.status}`);
+      lastCourses = body;
+      $('coursesStatus').textContent = `● 학생 화면 교과목 목록에 반영됨 · ${courses.length}개`;
+    } catch (err) { $('coursesStatus').textContent = `⚠ 교과목 목록을 반영하지 못했습니다 — ${err.message}`; }
+  }, 600);
+}
+$('coursesJsonBtn').onclick = () => {
+  if (!courses.length) { toast('먼저 교과목을 등록하세요.'); return; }
+  const blob = new Blob([JSON.stringify({ app: 'TUTORBOT', type: 'tutorbot-courses', version: APP_VERSION, updatedAt: nowISO(), courses }, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'courses.json'; // 올릴 때 이름이 정확히 courses.json이어야 함
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  toast('courses.json을 내려받았습니다. GitHub 저장소의 index.html 옆에 올리세요.');
+};
+
+// 학생: 채팅 머리의 교과목 선택 · 첫 화면 교과목 선택 창
+function renderCoursePicker() {
+  const sel = $('courseSelect');
+  const show = STUDENT && !FILE_DEPLOY && courses.length > 0;
+  sel.classList.toggle('hidden', !show);
+  if (!show) return;
+  sel.innerHTML = (needCourse() ? '<option value="" selected disabled>교과목 선택</option>' : '') +
+    courses.map(c => `<option value="${esc(c.code)}"${c.code === COURSE_CODE ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
+  $('pickList').innerHTML = courses.map(c => `<li><button type="button" class="pill w-full !justify-start !rounded-2xl px-4 py-3 text-left" data-pick="${esc(c.code)}">
+    <span class="text-xl" aria-hidden="true">📘</span><span class="min-w-0"><b class="block text-sm truncate">${esc(c.name)}</b><span class="block text-[11px] text-mute font-disp">${esc(c.code)}</span></span></button></li>`).join('');
+}
+$('courseSelect').onchange = () => { if ($('courseSelect').value) openCourse($('courseSelect').value); };
+$('pickList').onclick = e => { const b = e.target.closest('[data-pick]'); if (b) openCourse(b.dataset.pick); };
+function openCoursePicker() { renderCoursePicker(); if (!$('dlgCourse').open) $('dlgCourse').showModal(); }
 $('refJsonBtn').onclick = () => {
   if (!activeMaterials().length) { toast('참고자료가 없습니다.'); return; }
   const data = { app: 'TUTORBOT', type: 'tutorbot-reference', version: APP_VERSION, updatedAt: nowISO(), ...JSON.parse(publishPayload()) };
@@ -2571,7 +2694,16 @@ fitChat();
 growAsk();
 if (!chips.length) scheduleChips(0);
 else { const lastBot = [...messages].reverse().find(m => m.role === 'assistant'); if (!lastBot && aiMode()) scheduleChips(0); }
-if (PROF) { checkServer(); schedulePublish(300); $('shareAI').checked = S.shareAI; scheduleAIShare(300); }
+// 과목명이 비어 있으면 등록한 교과목 이름으로 채움
+if (COURSE_CODE && !S.course.course && courseName(COURSE_CODE)) {
+  S.course.course = courseName(COURSE_CODE);
+  document.querySelectorAll('[data-course="course"]').forEach(inp => { inp.value = S.course.course; });
+  if (!STUDENT) saveSettings();
+  renderMode(); renderSummaries(); renderCourseView(); renderMessages();
+}
+renderCourses(); renderCoursePicker();
+if (needCourse()) openCoursePicker();
+if (PROF) { scheduleCoursesPublish(); checkServer(); schedulePublish(300); $('shareAI').checked = S.shareAI; scheduleAIShare(300); }
 </script>
 </body>
 </html>
