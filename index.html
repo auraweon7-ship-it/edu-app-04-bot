@@ -156,6 +156,8 @@
   .is-student [data-prof] { display: none !important; }
   /* 챗봇 HTML: 채팅 카드만 화면에 표시 (머리말·패널·꼬리말 숨김) */
   .is-student #hdr, .is-student footer, .is-student #panel { display: none !important; }
+  /* 학생 화면: 추천 질문 칩 숨김 */
+  .is-student #chips, .is-student #refreshChips, .is-student #chipStatus { display: none !important; }
   .is-student main { max-width: 56rem; grid-template-columns: minmax(0, 1fr) !important; padding-top: 1rem; padding-bottom: 1rem; }
   .is-student #chatCard { position: static; height: calc(100dvh - 2rem); max-height: none; }
   @media (max-width: 639px) { .is-student main { padding-top: 0; padding-bottom: 0; } .is-student #chatCard { height: 100dvh; } }
@@ -616,6 +618,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.8.2  학생 화면에서 추천 질문 칩 줄 삭제(생성도 안 함), 자료 속 코드에서 나온 이상한 추천 질문 거름
 // v1.8.1  FILE ATTACH에 .html·.hwpx 올리기 추가 (본문 글자만 뽑음, 예전 .hwp는 안내)
 // v1.8.0  학생 화면도 교수 API 키로 AI 답변: 키는 서버에만 두고 서버가 대신 요청(api/chat), 교수 설정에 켜기·끄기 스위치
 // v1.7.4  학생 설정 창: 제출 파일 버튼 대신 「저장」 버튼 (제출 파일은 저장 ▾ 메뉴)
@@ -634,7 +637,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.8.1';
+const APP_VERSION = 'v1.8.2';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -1672,8 +1675,8 @@ function msgHTML(m, isLast) {
 function welcomeHTML() {
   const friendly = S.rules.tone === 'friendly', name = S.course.course || (STUDENT ? DEPLOY.title : '') || '이 강의';
   const t = friendly
-    ? `안녕하세요! 👋 **${name}** 튜터봇이에요.\n강의계획서와 수업자료를 근거로 답해 드려요. 자료에 없는 내용이면 솔직하게 알려 드릴게요.\n- 📘 **설명 모드**: 답을 바로 설명\n- 🧩 **힌트 모드**: 되물으며 스스로 답을 찾도록 도움\n아래 추천 질문을 눌러 시작해 보세요.`
-    : `안녕하십니까. **${name}** 튜터봇입니다.\n강의계획서와 수업자료를 근거로 답변드리며, 자료에 없는 내용은 그 사실을 먼저 밝힙니다.\n- 📘 **설명 모드**: 답을 바로 설명\n- 🧩 **힌트 모드**: 단계별 힌트로 스스로 답에 이르도록 도움\n아래 추천 질문으로 시작해 보십시오.`;
+    ? `안녕하세요! 👋 **${name}** 튜터봇이에요.\n강의계획서와 수업자료를 근거로 답해 드려요. 자료에 없는 내용이면 솔직하게 알려 드릴게요.\n- 📘 **설명 모드**: 답을 바로 설명\n- 🧩 **힌트 모드**: 되물으며 스스로 답을 찾도록 도움\n${STUDENT ? '아래 입력창에 궁금한 점을 적어 보세요.' : '아래 추천 질문을 눌러 시작해 보세요.'}`
+    : `안녕하십니까. **${name}** 튜터봇입니다.\n강의계획서와 수업자료를 근거로 답변드리며, 자료에 없는 내용은 그 사실을 먼저 밝힙니다.\n- 📘 **설명 모드**: 답을 바로 설명\n- 🧩 **힌트 모드**: 단계별 힌트로 스스로 답에 이르도록 도움\n${STUDENT ? '아래 입력창에 질문을 적어 주십시오.' : '아래 추천 질문으로 시작해 보십시오.'}`;
   return `<div class="flex items-start gap-2 pr-4 sm:pr-10"><div class="avatar" aria-hidden="true">T</div><div class="min-w-0 flex-1">
     <p class="text-[11px] font-bold mb-1">튜터봇</p>
     <div class="bubble bubble-bot max-w-[88%]"><div class="md">${md(t)}</div>${aiMode() ? '' : `<p class="mt-2 text-[11px] text-mute">지금은 API 키 없이 <b>샘플 모드</b>로 작동해요. ${STUDENT ? '수업자료에서 근거 문장을 찾아 답합니다.' : '⚙ 버튼에서 키를 넣으면 AI가 답합니다.'}</p>`}</div>
@@ -1755,7 +1758,8 @@ function deriveQuestions(mats) {
     if (mm) out.add(`${mm[1]}의 뜻은 무엇인가요?`);
   }
   mats.slice(0, 3).forEach(m => out.add(`「${m.name.slice(0, 20)}」의 핵심을 요약해 주세요`));
-  return [...out].slice(0, 40);
+  // 자료에 섞인 코드(CSS·HTML 등)에서 나온 이상한 질문은 뺌
+  return [...out].filter(q => !/[{}<>;=]|[a-z-]+\s*\{/i.test(q)).slice(0, 40);
 }
 function sampleChips(lastBot) {
   const mats = activeMaterials();
@@ -1780,6 +1784,7 @@ const matsHash = () => { let h = 0; const s = S.provider + S.rules.lang + active
 let chipTimer = null, chipSeq = 0;
 function scheduleChips(delay = 900) { clearTimeout(chipTimer); chipTimer = setTimeout(() => genChips(false), delay); }
 async function genChips(force) {
+  if (STUDENT) return; // 학생 화면은 추천 질문을 쓰지 않음 (AI 비용도 아낌)
   const seq = ++chipSeq;
   if (!aiMode()) { chips = sampleChips(); renderChips(); setChipStatus(''); saveChat(); return; }
   const cached = store.get(KEY_CHIPS, null);
