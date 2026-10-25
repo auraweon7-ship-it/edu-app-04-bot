@@ -696,6 +696,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.15.5 구글 드라이브 불러오기 오류 안내 개선(중계 기능 없음·로그인 필요를 구분), 공개 리더는 원래 공유 주소로도 재시도
 // v1.15.4 URL·구글 드라이브 자료 새로고침: 「모두 다시 불러오기」와 자료별 ↻, 불러온 날짜 표시, 바뀐 자료 요약
 // v1.15.3 REFERENCE → URL에 구글 드라이브·문서·슬라이드·시트 공유 링크 지원 (서버·Vercel 중계 /api/fetch, PDF·HWPX·HTML·TXT 글자 추출)
 // v1.15.2 강의 정보에서 과목명 칸 삭제, 과목명은 📘 COURSES 등록 이름을 사용
@@ -736,7 +737,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.15.4';
+const APP_VERSION = 'v1.15.5';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -1269,29 +1270,47 @@ async function bytesToText(buf, contentType, fileName) {
   return { text: str.replace(/^﻿/, '').trim(), kind: '텍스트' };
 }
 // 내려받기: ① 브라우저가 직접 ② 튜터봇 서버·Vercel 중계(/api/fetch, 교수 로그인) ③ 공개 리더(글자만)
-async function fetchBytes(target) {
+async function fetchBytes(target, original = target) {
   try {
     const r = await fetch(target);
     if (r.ok) return { buf: await r.arrayBuffer(), type: r.headers.get('content-type') || '', name: '', via: '직접' };
   } catch {}
-  let token = '';
+  const isGoogle = /(^|\.)google\.com$/i.test(new URL(target).hostname);
+  let token = '', relay = '';
   try { token = sessionStorage.getItem(PROF_TOKEN) || ''; } catch {}
-  if (SERVER && token && /(^|\.)google\.com$/i.test(new URL(target).hostname)) {
-    try {
-      const r = await fetch(`/api/fetch?url=${encodeURIComponent(target)}`, { headers: { 'x-tutorbot-token': token } });
-      if (r.ok) return { buf: await r.arrayBuffer(), type: r.headers.get('content-type') || '', name: decodeURIComponent(r.headers.get('x-filename') || ''), via: '튜터봇 서버' };
-      if (r.status !== 404 && r.status !== 405) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`); }
-    } catch (e) { if (!/Failed to fetch/i.test(e.message)) throw e; }
+  if (isGoogle) {
+    if (!SERVER) relay = '파일로 열린 앱에는 중계 서버가 없습니다';
+    else if (!token) relay = '교수 모드에 다시 로그인해야 합니다';
+    else {
+      try {
+        const r = await fetch(`/api/fetch?url=${encodeURIComponent(target)}`, { headers: { 'x-tutorbot-token': token } });
+        if (r.ok) return { buf: await r.arrayBuffer(), type: r.headers.get('content-type') || '', name: decodeURIComponent(r.headers.get('x-filename') || ''), via: '튜터봇 서버' };
+        if (r.status === 404 || r.status === 405) relay = '이 사이트에 구글 드라이브 중계 기능(api/fetch.mjs)이 없습니다';
+        else { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`); }
+      } catch (e) { if (!/Failed to fetch/i.test(e.message)) throw e; relay = '중계 서버에 연결할 수 없습니다'; }
+    }
   }
-  const r = await fetch(`https://r.jina.ai/${target}`);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const body = await r.text();
-  return { reader: true, title: (body.match(/^Title:\s*(.+)$/m) || [])[1] || '', text: body.replace(/^(Title|URL Source|Published Time|Markdown Content):.*$/gm, '').trim(), via: '공개 리더' };
+  // 공개 리더: 내려받기 주소가 안 되면 원래 공유 주소로 한 번 더 (글자만)
+  for (const u of [...new Set([target, original])]) {
+    try {
+      const r = await fetch(`https://r.jina.ai/${u}`);
+      if (!r.ok) continue;
+      const body = await r.text();
+      const text = body.replace(/^(Title|URL Source|Published Time|Markdown Content|Warning):.*$/gm, '').trim();
+      const title = (body.match(/^Title:\s*(.+)$/m) || [])[1] || '';
+      // 구글 오류·로그인 화면은 자료로 쓰지 않음
+      const errorPage = /^Error \d{3}|^Google Drive: Sign-in|^Sign-in|로그인/i.test(title) || /accounts\.google\.com|ServiceLogin|That’s an error|요청하신 파일이 존재하지|does not exist|You need access|액세스 권한 필요/i.test(text);
+      if (text.length >= 30 && !errorPage) return { reader: true, title: (body.match(/^Title:\s*(.+)$/m) || [])[1] || '', text, via: '공개 리더' };
+    } catch {}
+  }
+  throw new Error(isGoogle
+    ? `${relay || '구글 파일을 읽지 못했습니다'}. Vercel 저장소에 api 폴더(fetch.mjs·_ai.mjs 등)와 vercel.json을 올리거나, 로컬 서버(node server.js) 주소에서 교수 로그인 후 불러오세요`
+    : '페이지를 읽지 못했습니다');
 }
 // 주소(웹 페이지·구글 드라이브)에서 글자를 가져옴 — 처음 불러오기와 새로고침이 함께 씀
 async function loadFromUrl(url) {
   const drive = driveLink(url);
-  const res = await fetchBytes(drive ? drive.url : url);
+  const res = await fetchBytes(drive ? drive.url : url, url);
   let got;
   if (res.reader) got = { title: res.title, text: res.text, kind: '텍스트' };
   else { got = await bytesToText(res.buf, res.type, res.name); got.title = got.title || (res.name || '').replace(/\.[^.]+$/, ''); }
@@ -1314,7 +1333,7 @@ $('addUrl').onclick = async () => {
     setNote(st, 'ok', `✔ 「${name}」 ${got.text.length.toLocaleString()}자를 불러왔습니다 (${drive ? `${drive.type} · ` : ''}${got.kind || ''} · ${got.via} 읽기).`);
     $('urlInput').value = ''; $('urlName').value = '';
   } catch (e) {
-    setNote(st, 'fail', `✘ 읽지 못했습니다 — ${e.message}.${drive ? ' 구글 드라이브는 공유 설정을 「링크가 있는 모든 사용자 · 뷰어」로 해 주세요.' : ''}`);
+    setNote(st, 'fail', `✘ 읽지 못했습니다 — ${e.message}.${drive && !/api 폴더|node server/.test(e.message) ? ' 구글 드라이브 공유 설정이 「링크가 있는 모든 사용자 · 뷰어」인지도 확인하세요.' : ''}`);
   } finally { btn.disabled = false; }
 };
 
