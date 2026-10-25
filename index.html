@@ -157,12 +157,15 @@
   /* 학생용 배포 파일: 편집 패널 숨김 */
   .is-student [data-prof] { display: none !important; }
   /* 챗봇 HTML: 채팅 카드만 화면에 표시 (머리말·패널·꼬리말 숨김) */
-  .is-student #hdr, .is-student footer, .is-student #panel { display: none !important; }
+  .is-student #hdr, .is-student #panel { display: none !important; }
+  /* 학생 화면: 꼬리말은 채팅 아래에 작게 보이도록 (채팅 높이에서 꼬리말 높이를 뺌) */
+  .is-student footer { margin-top: 0; }
+  .is-student footer > div { padding-top: .75rem; padding-bottom: calc(.75rem + env(safe-area-inset-bottom)); }
   /* 학생 화면: 추천 질문 칩 숨김 */
   .is-student #chips, .is-student #refreshChips, .is-student #chipStatus { display: none !important; }
   .is-student main { max-width: 56rem; grid-template-columns: minmax(0, 1fr) !important; padding-top: 1rem; padding-bottom: 1rem; }
-  .is-student #chatCard { position: static; height: calc(100dvh - 2rem); max-height: none; }
-  @media (max-width: 639px) { .is-student main { padding-top: 0; padding-bottom: 0; } .is-student #chatCard { height: 100dvh; } }
+  .is-student #chatCard { position: static; height: calc(100dvh - 2rem - var(--ft-h, 4rem)); max-height: none; }
+  @media (max-width: 639px) { .is-student main { padding-top: 0; padding-bottom: 0; } .is-student #chatCard { height: calc(100dvh - var(--ft-h, 5rem)); } }
   body:not(.is-student) [data-student] { display: none !important; }
   /* 화면 배치: 넓은 화면은 2단, 휴대폰·태블릿은 채팅 전체 화면 (패널은 버튼으로 열기) */
   @media (min-width: 1024px) {
@@ -629,6 +632,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.11.1 학생 화면 하단에 꼬리말(저작권·교수명) 표시, 채팅 높이를 꼬리말만큼 줄여 한 화면에 보이게
 // v1.11.0 온라인(GitHub Pages) 학생 화면도 AI 답변: Cloudflare Workers 중계 서버(worker/worker.js)에 키를 비밀 값으로 두고, 교수 설정에 중계 주소·확인, 주소는 reference.json에 담김
 // v1.10.1 샘플 모드 답변 개선: 드문 낱말에 무게(흔한 말 무시), 자료 안내·과제 문장 감점, 앞뒤 맥락 문장 포함, 「AI 연결되면」 안내 문구 삭제
 // v1.10.0 온라인(GitHub Pages) 배포 지원: 앱 옆의 reference.json을 학생 화면이 읽음, 교수 화면에 「reference.json ↓」, 정적 호스팅에서는 405 대신 안내
@@ -656,7 +660,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.11.0';
+const APP_VERSION = 'v1.11.1';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -2289,10 +2293,11 @@ $('openPanel').onclick = () => document.body.classList.contains('panel-open') ? 
 $('closePanel').onclick = () => { closePanel(); $('ask').focus({ preventScroll: true }); };
 function fitChat() {
   const card = $('chatCard');
+  if (STUDENT) document.documentElement.style.setProperty('--ft-h', `${document.querySelector('footer').offsetHeight}px`);
   if (innerWidth >= 1024 || STUDENT && innerWidth >= 640) { card.style.height = ''; return; }
   const vv = window.visualViewport, h = vv ? vv.height : innerHeight;
   const typing = document.activeElement === $('ask') && vv && vv.height < innerHeight * 0.85;
-  card.style.height = `${Math.max(300, h - (typing ? 0 : $('hdr').offsetHeight))}px`;
+  card.style.height = `${Math.max(300, h - (typing ? 0 : $('hdr').offsetHeight + (STUDENT ? document.querySelector('footer').offsetHeight : 0)))}px`;
   if (typing) window.scrollTo(0, card.offsetTop);
 }
 addEventListener('resize', fitChat);
