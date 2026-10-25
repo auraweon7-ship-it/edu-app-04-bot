@@ -631,6 +631,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.12.2 로그아웃한 학생 화면(교수님 브라우저)도 저장된 교수 키·중계 주소로 AI 답변, GitHub Pages에서 reference.json 없어도 동작
 // v1.12.1 휴대폰 학생 화면: 채팅 제목 한 줄, 꼬리말 작게
 // v1.12.0 학생 화면을 교수 채팅과 같게: 머리말·추천 질문·출처 칩·AI 기능 모두 표시, 교수용 왼쪽 패널과 자료·AI 설정 버튼만 숨김
 // v1.11.1 학생 화면 하단에 꼬리말(저작권·교수명) 표시, 채팅 높이를 꼬리말만큼 줄여 한 화면에 보이게
@@ -661,7 +662,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.12.1';
+const APP_VERSION = 'v1.12.2';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -699,7 +700,7 @@ const DEPLOY = FILE_DEPLOY || (PROF ? null : (() => {
   if (pub) return { id: pub._src === REF_FILE ? 'github' : 'server', title: pub.course?.course || pub.title || '04 AI 학습용 챗봇', course: pub.course || {}, materials: pub.materials, rules: pub.rules || {}, updatedAt: pub.updatedAt, aiProxy: typeof pub.aiProxy === 'string' ? pub.aiProxy : '' };
   let s = null;
   try { s = JSON.parse(localStorage.getItem('tutorbot-settings') || 'null'); } catch {}
-  return { id: 'local', title: s?.course?.course || '04 AI 학습용 챗봇', course: s?.course || {}, materials: Array.isArray(s?.materials) ? s.materials : [], rules: s?.rules || {} };
+  return { id: 'local', title: s?.course?.course || '04 AI 학습용 챗봇', course: s?.course || {}, materials: Array.isArray(s?.materials) ? s.materials : [], aiProxy: typeof s?.aiProxy === 'string' ? s.aiProxy : '', rules: s?.rules || {} };
 })());
 const STUDENT = !!DEPLOY;
 // 학생 화면 AI (키는 학생에게 오지 않음): ① 튜터봇 서버(/api/ai) ② 교수님이 지정한 중계 서버(Cloudflare Workers)
@@ -927,8 +928,16 @@ document.querySelectorAll('dialog').forEach(d => {
 });
 
 // ---------- 헤더 · 모드 ----------
-const aiMode = () => !!SERVER_AI || !!S.keys[S.provider].trim();
-const aiName = () => PROVIDERS[SERVER_AI ? SERVER_AI.provider : S.provider].name;
+// 로그아웃한 학생 화면(내려받은 파일 제외)에서 중계 서버가 없으면, 이 브라우저에 저장된 교수님 키를 씀 (교수님 PC에서 확인할 때)
+const LOCAL_AI = STUDENT && !FILE_DEPLOY && !SERVER_AI ? (() => {
+  try {
+    const p = JSON.parse(localStorage.getItem('tutorbot-settings') || 'null');
+    const prov = PROVIDERS[p?.provider] ? p.provider : null, key = prov && typeof p.keys?.[prov] === 'string' ? p.keys[prov].trim() : '';
+    return key ? { provider: prov, key, model: (p.models?.[prov] || '').trim() || PROVIDERS[prov].model, effort: typeof p.effort === 'string' ? p.effort : '' } : null;
+  } catch { return null; }
+})() : null;
+const aiMode = () => !!SERVER_AI || !!LOCAL_AI || !!S.keys[S.provider].trim();
+const aiName = () => PROVIDERS[SERVER_AI ? SERVER_AI.provider : LOCAL_AI ? LOCAL_AI.provider : S.provider].name;
 // 헤더 날짜: 10 25 2026 SUN
 function renderToday() {
   const d = new Date();
@@ -950,7 +959,7 @@ function renderMode() {
   const info = [S.course.univ, S.course.dept, S.course.prof && `${S.course.prof} 교수`].filter(x => x && x.trim()).join(' · ');
   $('chatCourse').textContent = info;
   $('chatCourse').classList.toggle('hidden', !info);
-  $('chatSub').textContent = `${aiMode() ? `${aiName()} 연결${SERVER_AI ? ' (교수님 설정)' : ''}` : '샘플 모드 (API 키 없음)'} · ${RULE_LABELS.mode[S.rules.mode]} · 자료 ${activeMaterials().length}개`;
+  $('chatSub').textContent = `${aiMode() ? `${aiName()} 연결${SERVER_AI || LOCAL_AI ? ' (교수님 설정)' : ''}` : '샘플 모드 (API 키 없음)'} · ${RULE_LABELS.mode[S.rules.mode]} · 자료 ${activeMaterials().length}개`;
   document.querySelectorAll('[data-quick-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.quickMode === S.rules.mode)));
 }
 
@@ -1508,7 +1517,10 @@ function historyFor(bot) {
   return out;
 }
 async function streamAI({ system, history: hist, onDelta = () => {}, signal, maxTokens = 2048 }) {
-  const p = SERVER_AI ? SERVER_AI.provider : S.provider, key = S.keys[p].trim(), model = S.models[p].trim() || PROVIDERS[p].model;
+  const p = SERVER_AI ? SERVER_AI.provider : LOCAL_AI ? LOCAL_AI.provider : S.provider;
+  const key = LOCAL_AI && !SERVER_AI ? LOCAL_AI.key : S.keys[p].trim();
+  const model = LOCAL_AI && !SERVER_AI ? LOCAL_AI.model : S.models[p].trim() || PROVIDERS[p].model;
+  const effort = LOCAL_AI && !SERVER_AI ? LOCAL_AI.effort : S.effort;
   let url, headers, body, pick;
   if (SERVER_AI) {
     url = SERVER_AI.chat;
@@ -1525,7 +1537,7 @@ async function streamAI({ system, history: hist, onDelta = () => {}, signal, max
     url = 'https://api.openai.com/v1/chat/completions';
     headers = { authorization: `Bearer ${key}` };
     body = { model, stream: true, messages: [{ role: isReasoningModel(model) ? 'developer' : 'system', content: system }, ...hist.map(m => ({ role: m.role, content: m.text }))] };
-    if (S.effort && isReasoningModel(model)) body.reasoning_effort = S.effort;
+    if (effort && isReasoningModel(model)) body.reasoning_effort = effort;
     pick = d => d.choices?.[0]?.delta?.content || '';
   } else {
     url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
