@@ -618,6 +618,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.8.3  학생 화면에서 출처 칩(교수 자료 원문 연결) 표시하지 않음 — 화면·저장 문서·제출 파일 모두
 // v1.8.2  학생 화면에서 추천 질문 칩 줄 삭제(생성도 안 함), 자료 속 코드에서 나온 이상한 추천 질문 거름
 // v1.8.1  FILE ATTACH에 .html·.hwpx 올리기 추가 (본문 글자만 뽑음, 예전 .hwp는 안내)
 // v1.8.0  학생 화면도 교수 API 키로 AI 답변: 키는 서버에만 두고 서버가 대신 요청(api/chat), 교수 설정에 켜기·끄기 스위치
@@ -637,7 +638,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.8.2';
+const APP_VERSION = 'v1.8.3';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -820,6 +821,7 @@ if (STUDENT) {
   const saved = store.get(KEY_CHAT, null);
   if (Array.isArray(saved?.messages)) messages = saved.messages.filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string');
   if (Array.isArray(saved?.chips)) chips = saved.chips.filter(c => typeof c === 'string').slice(0, 6);
+  if (STUDENT) messages.forEach(m => { m.sources = []; }); // 학생 화면: 예전 대화의 출처 연결도 지움
 }
 
 // ---------- 샘플 강의계획서 · 수업자료 ----------
@@ -1570,6 +1572,7 @@ async function ask(text, { stage = 1, hint = false, regen = false, q = null } = 
     else { bot.error = true; bot.text = `${bot.text ? bot.text + '\n\n' : ''}⚠ 답변을 받지 못했어요 — ${e.message}`; }
   } finally {
     if (user) user.read = true;
+    if (STUDENT) bot.sources = []; // 학생 화면: 교수 자료 출처(원문 연결)를 보여 주지 않음
     bot.streaming = false;
     if (!bot.text.trim()) bot.text = '(답변을 중지했습니다)';
     else if (bot.stopped) bot.text += '\n\n(중지됨)';
@@ -1658,7 +1661,7 @@ function msgHTML(m, isLast) {
     else acts.push(`<span class="text-[11px] text-mute self-center">정답 공개는 교수 설정으로 꺼져 있어요</span>`);
   }
   if (isLast && !m.streaming) acts.push(`<button type="button" class="pill px-3 py-1 text-[11px]" data-act="regen">↻ 다시 생성</button>`);
-  const srcs = m.sources?.length ? `<div class="mt-1.5 flex flex-wrap items-center gap-1.5 min-w-0"><span class="text-[10px] font-bold text-mute">출처</span>${m.sources.map((s, i) =>
+  const srcs = !STUDENT && m.sources?.length ? `<div class="mt-1.5 flex flex-wrap items-center gap-1.5 min-w-0"><span class="text-[10px] font-bold text-mute">출처</span>${m.sources.map((s, i) =>
     `<button type="button" class="src-chip" data-act="src" data-i="${i}" title="${esc(s.doc)} — ${esc(s.quote)}"><span class="ic" aria-hidden="true">§</span><b>${esc(s.doc)}</b><span class="q">“${esc(s.quote)}”</span></button>`).join('')}</div>` : '';
   return `<div class="flex items-start gap-2 pr-4 sm:pr-10" data-mid="${m.id}">
     <div class="avatar" aria-hidden="true">T</div>
