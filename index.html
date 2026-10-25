@@ -470,8 +470,6 @@
           <button id="publishBtn" type="button" class="pill px-3 py-1 text-[11px]">지금 반영</button>
           <button id="refJsonBtn" type="button" class="pill px-3 py-1 text-[11px]" title="GitHub 저장소(index.html 옆)에 올리면 온라인 학생 화면이 이 자료로 답합니다">reference.json ↓</button>
         </div>
-        <label class="block" data-prof><span class="block text-xs font-bold mb-1.5">히스토리 이름 (교과목·주제)</span>
-          <input id="histTitle" type="text" class="field" placeholder="비우면 첫 수업자료 이름을 씁니다 (예: 3주차 개혁개방)"></label>
       </div>
     </div>
 
@@ -695,6 +693,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.15.1 히스토리 이름을 📘 COURSES 과목명으로 자동 지정, 「히스토리 이름」 입력칸 삭제
 // v1.15.0 교과목 등록(교수: 📘 COURSES, 서버 자동 게시·courses.json), 학생은 교과목을 고른 뒤 채팅(첫 화면 선택 창·채팅 머리 선택 상자)
 // v1.14.1 모바일 반응형 보강: 입력칸 16px(아이폰 확대 방지), 터치 화면 버튼·칩 크기 키움, 휴대폰에서 표를 카드로, 노치 영역 여백, 대화상자 넓게
 // v1.14.0 여러 과목: 주소 ?c=과목코드로 과목 구분, reference-과목코드.json·과목별 서버 게시, 교수 설정·학생 대화 과목별 저장(AI 키는 공통), 교수 화면에 과목 코드·학생 주소
@@ -731,7 +730,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.15.0';
+const APP_VERSION = 'v1.15.1';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -2175,7 +2174,9 @@ $('saveStudent').onclick = () => {
 // ---------- 챗봇 HTML · 히스토리 ----------
 // 화면에 보이는 자료(비어 있으면 샘플 자료)를 그대로 세트로 씀
 const autoTitle = () => (activeMaterials().find(m => m.kind !== 'syllabus') || activeMaterials()[0])?.name || '참고자료 세트';
-const currentSet = () => ({ title: $('histTitle').value.trim() || autoTitle(), course: { ...S.course }, materials: activeMaterials().map(m => ({ ...m })), rules: { ...S.rules } });
+// 히스토리 이름: 📘 COURSES에 등록한 과목명 → 강의 정보의 과목명 → 첫 수업자료 이름
+const setTitle = () => courseName(COURSE_CODE) || S.course.course.trim() || autoTitle();
+const currentSet = () => ({ title: setTitle(), course: { ...S.course }, materials: activeMaterials().map(m => ({ ...m })), rules: { ...S.rules } });
 function buildStudentHTML(set) {
   const data = { id: uid(), title: set.title, course: set.course, materials: set.materials, rules: set.rules, createdAt: nowISO(), version: APP_VERSION };
   const json = JSON.stringify(data).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
@@ -2200,11 +2201,10 @@ $('saveHist').onclick = () => {
   else history.unshift({ ...set, id: uid() });
   toast(i >= 0 ? `「${set.title}」 세트를 수정했습니다.` : `「${set.title}」 세트를 히스토리에 저장했습니다.`);
   S.editingId = null;
-  $('histTitle').value = '';
   persistHistory(); saveSettings(); renderHistory(); renderSummaries();
   if (!storageOK) toast('이 환경은 브라우저 저장이 막혀 있어 새로고침하면 히스토리가 사라집니다. ⚙ 설정 내보내기를 이용하세요.');
 };
-$('cancelEdit').onclick = () => { S.editingId = null; $('histTitle').value = ''; saveSettings(); renderHistory(); };
+$('cancelEdit').onclick = () => { S.editingId = null; saveSettings(); renderHistory(); };
 function loadSet(h) {
   S.course = { ...S.course, ...h.course };
   S.materials = h.materials.filter(validMat).map(normMat);
@@ -2220,7 +2220,7 @@ function renderHistory() {
   $('histBody').innerHTML = history.length ? history.map((h, i) => `
     <tr${h.id === S.editingId ? ' style="background:rgba(var(--accent),.07)"' : ''}>
       <td class="whitespace-nowrap text-mute" data-wide>${fmtDT(h.at).replace(' ', ' <br>')}</td>
-      <td class="min-w-[8rem]" data-wide><b class="block text-[12px] font-semibold">${esc(h.course?.course || '과목 미입력')}</b><span class="text-[11px] text-mute">${esc(h.title)}</span></td>
+      <td class="min-w-[8rem]" data-wide><b class="block text-[12px] font-semibold">${esc(h.title || h.course?.course || '과목 미입력')}</b>${h.course?.course && h.course.course !== h.title ? `<span class="text-[11px] text-mute">${esc(h.course.course)}</span>` : ''}</td>
       <td class="text-center" data-wide data-label="자료">${h.materials.length}개</td>
       <td class="text-center"><button type="button" class="pill px-2.5 py-1 text-[11px]" data-h="open" data-i="${i}">열기</button></td>
       <td class="text-center"><button type="button" class="pill px-2.5 py-1 text-[11px]" data-h="html" data-i="${i}" title="이 세트로 챗봇 HTML 내려받기">HTML ↓</button></td>
@@ -2237,8 +2237,8 @@ $('histBody').onclick = e => {
     S.editingId = null; loadSet(h); toast(`「${h.title}」 세트를 열었습니다.`);
   } else if (b.dataset.h === 'html') downloadStudent(h);
   else if (b.dataset.h === 'edit') {
-    S.editingId = h.id; loadSet(h); $('histTitle').value = h.title;
-    setCollapsed('ref', false); $('histTitle').focus();
+    S.editingId = h.id; loadSet(h);
+    setCollapsed('ref', false); $('saveHist').focus();
     toast('자료·규칙을 고친 뒤 「히스토리 수정 저장」을 누르세요.');
   } else if (b.dataset.h === 'del' && confirm(`「${h.title}」 세트를 히스토리에서 삭제할까요?`)) {
     history.splice(+b.dataset.i, 1);
