@@ -631,6 +631,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.12.3 튜터봇 답변의 출처 칩 삭제 (교수·학생 화면, TXT·HTML·HWPX 저장 문서 모두)
 // v1.12.2 로그아웃한 학생 화면(교수님 브라우저)도 저장된 교수 키·중계 주소로 AI 답변, GitHub Pages에서 reference.json 없어도 동작
 // v1.12.1 휴대폰 학생 화면: 채팅 제목 한 줄, 꼬리말 작게
 // v1.12.0 학생 화면을 교수 채팅과 같게: 머리말·추천 질문·출처 칩·AI 기능 모두 표시, 교수용 왼쪽 패널과 자료·AI 설정 버튼만 숨김
@@ -662,7 +663,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.12.2';
+const APP_VERSION = 'v1.12.3';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -786,6 +787,8 @@ const RULE_LABELS = {
   length: { short: '짧게', normal: '보통', long: '자세히' },
   lang: { ko: '한국어', zh: '중국어', en: '영어' }
 };
+// 답변 아래 출처 칩(근거 자료·인용 문장) 표시 여부 — 화면·저장 문서 모두
+const SHOW_SOURCES = false;
 const KIND_LABEL = { syllabus: '강의계획서', note: '수업자료', file: 'FILE', url: 'URL', faq: 'FAQ' };
 const S = {
   provider: 'claude',
@@ -1742,7 +1745,7 @@ function msgHTML(m, isLast) {
     else acts.push(`<span class="text-[11px] text-mute self-center">정답 공개는 교수 설정으로 꺼져 있어요</span>`);
   }
   if (isLast && !m.streaming) acts.push(`<button type="button" class="pill px-3 py-1 text-[11px]" data-act="regen">↻ 다시 생성</button>`);
-  const srcs = m.sources?.length ? `<div class="mt-1.5 flex flex-wrap items-center gap-1.5 min-w-0"><span class="text-[10px] font-bold text-mute">출처</span>${m.sources.map((s, i) =>
+  const srcs = SHOW_SOURCES && m.sources?.length ? `<div class="mt-1.5 flex flex-wrap items-center gap-1.5 min-w-0"><span class="text-[10px] font-bold text-mute">출처</span>${m.sources.map((s, i) =>
     `<button type="button" class="src-chip" data-act="src" data-i="${i}" title="${esc(s.doc)} — ${esc(s.quote)}"><span class="ic" aria-hidden="true">§</span><b>${esc(s.doc)}</b><span class="q">“${esc(s.quote)}”</span></button>`).join('')}</div>` : '';
   return `<div class="flex items-start gap-2 pr-4 sm:pr-10" data-mid="${m.id}">
     <div class="avatar" aria-hidden="true">T</div>
@@ -1906,7 +1909,7 @@ function exportTXT() {
   for (const m of doneMsgs()) {
     L.push(`[${fmtDT(m.time)}] ${m.role === 'user' ? '학생' : `튜터 (${stageTag(m)})`}${m.outside ? ' · 수업자료에 없는 내용' : ''}`);
     L.push(plain(m.text));
-    (m.sources || []).forEach(s => L.push(`  · 출처: 「${s.doc}」 "${s.quote}"`));
+    (SHOW_SOURCES ? m.sources || [] : []).forEach(s => L.push(`  · 출처: 「${s.doc}」 "${s.quote}"`));
     L.push('');
   }
   download(L.join('\r\n'), `대화내역_${docTitle()}`, 'txt', 'text/plain');
@@ -1966,7 +1969,7 @@ function exportHTML() {
     ? `<div class="row user"><span class="meta">${fmtTime(m.time)}</span><div class="bubble">${esc(m.text)}</div></div>`
     : `<div class="row bot"><div class="av">T</div><div style="min-width:0"><p class="name">튜터봇 <span>· ${stageTag(m)}</span></p>
         <div class="row" style="margin:0"><div class="bubble">${m.outside ? '<span class="out">📌 수업자료에 없는 내용</span>' : ''}${md(m.outside ? m.text.replace(OUTSIDE_RE, '') : m.text)}</div><span class="meta">${fmtTime(m.time)}</span></div>
-        ${m.sources?.length ? `<div class="src">${m.sources.map(s => `<span><b>§ ${esc(s.doc)}</b> “${esc(s.quote)}”</span>`).join('')}</div>` : ''}</div></div>`).join('');
+        ${SHOW_SOURCES && m.sources?.length ? `<div class="src">${m.sources.map(s => `<span><b>§ ${esc(s.doc)}</b> “${esc(s.quote)}”</span>`).join('')}</div>` : ''}</div></div>`).join('');
   const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>대화 내역 — ${esc(docTitle())}</title><style>${EXPORT_CSS}</style></head><body>
 <header class="glass"><div class="wrap"><p class="brand">TUTORBOT<span class="ver">${APP_VERSION}</span></p><p class="series">교수신문 AI 교육 웹앱 시리즈</p><h1>04 AI 학습용 챗봇 · 대화 내역</h1></div></header>
@@ -2012,7 +2015,7 @@ ${Array.from({ length: n }, (_, r) => `<hp:tr>${rows.slice(r * 2, r * 2 + 2).map
       return [
         para(run('A. ', 9) + (m.outside ? run('[수업자료에 없는 내용] ', 16) : '') + run(lines[0] || '') + run(`  [${stageTag(m)}]`), 25),
         ...lines.slice(1).map(l => para(run(l), 25)),
-        ...(m.sources || []).map(s => para(run('출처: ', 9) + run(`「${s.doc}」 “${s.quote}”`), 25)),
+        ...(SHOW_SOURCES ? m.sources || [] : []).map(s => para(run('출처: ', 9) + run(`「${s.doc}」 “${s.quote}”`), 25)),
         empty()
       ];
     })
