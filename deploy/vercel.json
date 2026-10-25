@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/*.mjs": { "maxDuration": 60 }
+  },
+  "headers": [
+    { "source": "/reference.json", "headers": [{ "key": "cache-control", "value": "no-cache" }] }
+  ]
+}
