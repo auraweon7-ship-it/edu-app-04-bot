@@ -250,7 +250,7 @@
           <input data-student-field="dept" type="text" class="field" placeholder="예: 중국언어문화학부"></label>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <button type="button" data-act="submitJson" class="pill pill-dark px-5 py-2.5 text-sm">대화 기록 제출 파일(JSON) 저장 ↓</button>
+        <button type="button" id="saveStudent" class="pill pill-dark px-6 py-2.5 text-sm">저장</button>
         <span id="studentNote" class="text-[11px] text-mute"></span>
       </div>
     </div>
@@ -294,6 +294,13 @@
           <select id="effort" class="field !w-auto !py-1.5 text-xs"></select>
         </label>
         <div id="checkStatus" class="hidden mt-2 rounded-2xl px-3 py-2 text-xs leading-5" role="status"></div>
+        <div class="mt-3 glass-chip rounded-2xl px-3.5 py-2.5 space-y-1.5" data-prof>
+          <label class="flex items-center justify-between gap-3 text-xs font-bold cursor-pointer">
+            <span>🎓 학생 화면에서도 이 키로 AI 답변</span>
+            <input id="shareAI" type="checkbox" class="switch">
+          </label>
+          <p id="shareAIStatus" class="text-[11px] text-mute leading-5">키는 이 PC의 서버에만 저장되고 학생 브라우저로는 보내지 않습니다. 학생 질문 비용은 교수님 계정으로 청구됩니다.</p>
+        </div>
       </div>
       <div class="space-y-2" data-prof>
         <div class="sec-head">💾 BACKUP <small>—— 설정 내보내기 · 불러오기</small></div>
@@ -359,10 +366,10 @@
 
           <div id="pane-file" role="tabpanel" aria-labelledby="tab-file" class="hidden">
             <label class="drop block rounded-[1.4rem] sunk p-6 text-center cursor-pointer">
-              <input id="fileInput" type="file" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf" multiple class="sr-only">
+              <input id="fileInput" type="file" accept=".txt,.md,.pdf,.html,.htm,.hwpx,text/plain,text/markdown,text/html,application/pdf" multiple class="sr-only">
               <span class="block text-2xl" aria-hidden="true">📎</span>
               <span class="block mt-2 text-sm font-bold">파일을 끌어 놓거나 눌러서 선택</span>
-              <span class="block mt-1 text-[11px] text-mute">.txt · .md · .pdf (여러 개 가능, 파일당 20MB) — PDF는 글자를 뽑아 자료로 저장</span>
+              <span class="block mt-1 text-[11px] text-mute">.txt · .md · .pdf · .html · .hwpx (여러 개 가능, 파일당 20MB) — 글자만 뽑아 자료로 저장</span>
             </label>
             <p id="fileStatus" class="hidden mt-2 rounded-2xl px-3 py-2 text-xs"></p>
           </div>
@@ -542,7 +549,7 @@
 <dialog id="dlgSetup" aria-labelledby="setupTitle">
   <div class="dlg glass rounded-[1.75rem] p-5 sm:p-6 w-[min(34rem,calc(100vw-1.5rem))] space-y-6">
     <div class="flex items-center gap-3">
-      <h2 id="setupTitle" class="flex-1 text-base font-bold">⚙ 챗봇 설정 <span class="block text-[11px] font-medium text-mute">성명·학과·학번과 본인 API 키를 입력하세요</span></h2>
+      <h2 id="setupTitle" class="flex-1 text-base font-bold">⚙ 챗봇 설정 <span class="block text-[11px] font-medium text-mute">성명·학과·학번을 입력하세요</span></h2>
       <button type="button" class="pill w-9 h-9" data-close aria-label="닫기">✕</button>
     </div>
     <div id="setupBody" class="space-y-7"></div>
@@ -609,6 +616,11 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.8.1  FILE ATTACH에 .html·.hwpx 올리기 추가 (본문 글자만 뽑음, 예전 .hwp는 안내)
+// v1.8.0  학생 화면도 교수 API 키로 AI 답변: 키는 서버에만 두고 서버가 대신 요청(api/chat), 교수 설정에 켜기·끄기 스위치
+// v1.7.4  학생 설정 창: 제출 파일 버튼 대신 「저장」 버튼 (제출 파일은 저장 ▾ 메뉴)
+// v1.7.3  게시 토큰 없는 예전 교수 로그인은 다시 로그인하게 함, 학생 화면이 1분마다 새 게시 자료를 받아 반영, 서버에 게시 기록
+// v1.7.2  학생 ⚙ 설정 창에는 STUDENT INFO만 표시 (AI 설정·교수 로그인 링크 제외)
 // v1.7.1  학생 화면을 열 때 챗봇 설정 창이 저절로 뜨지 않게 함 (⚙ 설정 버튼으로 열기)
 // v1.7.0  교수 모드에서 저장한 자료를 서버(node server.js)에 자동 게시 → 같은 주소로 접속한 학생 기기에서 사용
 // v1.6.0  교수 모드(비밀번호 로그인)·학생 모드 구분: 로그인 전에는 챗봇 섹션만 표시, 교수 모드에 로그아웃
@@ -622,7 +634,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.7.1';
+const APP_VERSION = 'v1.8.1';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -635,7 +647,8 @@ const SOURCE_HTML = (() => {
 // - 이 앱 자체: 로그인하지 않으면 이 브라우저에 저장된 교수 자료로 학생 모드
 const FILE_DEPLOY = (() => { try { return JSON.parse(document.getElementById('deployData').textContent); } catch { return null; } })();
 const PROF_SESSION = 'tutorbot-prof';
-const PROF = !FILE_DEPLOY && (() => { try { return sessionStorage.getItem(PROF_SESSION) === '1'; } catch { return false; } })();
+// 로그인 표시와 게시용 토큰이 모두 있어야 교수 모드 (토큰 없는 예전 로그인은 다시 로그인)
+const PROF = !FILE_DEPLOY && (() => { try { return sessionStorage.getItem(PROF_SESSION) === '1' && !!sessionStorage.getItem('tutorbot-token'); } catch { return false; } })();
 // 앱을 서버(node server.js)로 열었는지: 그렇다면 교수 모드에서 게시한 자료를 학생 화면이 서버에서 받음
 const SERVER = /^https?:$/.test(location.protocol);
 function fetchPublished() {
@@ -649,6 +662,16 @@ function fetchPublished() {
     return Array.isArray(d?.materials) ? d : null;
   } catch { return null; }
 }
+// 학생 화면(서버로 연 앱): 교수님이 켠 AI가 있으면 교수 키로 서버를 거쳐 답함 (키는 학생에게 오지 않음)
+const SERVER_AI = !FILE_DEPLOY && !PROF && SERVER ? (() => {
+  try {
+    const x = new XMLHttpRequest();
+    x.open('GET', 'api/ai', false);
+    x.send();
+    const d = x.status === 200 ? JSON.parse(x.responseText) : null;
+    return d?.enabled ? { provider: d.provider, model: d.model } : null;
+  } catch { return null; }
+})() : null;
 const DEPLOY = FILE_DEPLOY || (PROF ? null : (() => {
   const pub = fetchPublished();
   if (pub) return { id: 'server', title: pub.course?.course || pub.title || '04 AI 학습용 챗봇', course: pub.course || {}, materials: pub.materials, rules: pub.rules || {}, updatedAt: pub.updatedAt };
@@ -729,6 +752,7 @@ const S = {
   models: Object.fromEntries(Object.entries(PROVIDERS).map(([k, p]) => [k, p.model])),
   remember: true,
   effort: '',
+  shareAI: true,
   course: { univ: '', dept: '', prof: '', course: '' },
   materials: [],
   rules: { mode: 'explain', tone: 'friendly', length: 'normal', lang: 'ko', reveal: true },
@@ -757,6 +781,7 @@ function applySettings(s) {
   for (const k in S.keys) if (typeof s.keys?.[k] === 'string') S.keys[k] = s.keys[k];
   for (const k in S.models) if (typeof s.models?.[k] === 'string' && s.models[k].trim() && !OLD_DEFAULTS[k]?.includes(s.models[k])) S.models[k] = s.models[k];
   if (EFFORTS[s.effort] !== undefined) S.effort = s.effort;
+  if (typeof s.shareAI === 'boolean') S.shareAI = s.shareAI;
   if (PROVIDERS[s.provider]) S.provider = s.provider;
   if (typeof s.remember === 'boolean') S.remember = s.remember;
   for (const k in RULE_LABELS) if (RULE_LABELS[k][s.rules?.[k]]) S.rules[k] = s.rules[k];
@@ -770,10 +795,10 @@ function applySettings(s) {
 }
 let saveFailShown = false;
 function saveSettings() {
-  const data = { provider: S.provider, models: S.models, keys: S.remember ? S.keys : {}, remember: S.remember, effort: S.effort, rules: S.rules, collapsed: S.collapsed, student: S.student };
+  const data = { provider: S.provider, models: S.models, keys: S.remember ? S.keys : {}, remember: S.remember, effort: S.effort, shareAI: S.shareAI, rules: S.rules, collapsed: S.collapsed, student: S.student };
   if (!STUDENT) Object.assign(data, { course: S.course, materials: S.materials, editingId: S.editingId });
   const ok = store.set(KEY_SETTINGS, data);
-  if (PROF && typeof schedulePublish === 'function') schedulePublish();
+  if (PROF && typeof schedulePublish === 'function') { schedulePublish(); scheduleAIShare(); }
   if (!ok && storageOK && !saveFailShown) { saveFailShown = true; toast('저장 공간이 부족해 자료를 저장하지 못했습니다. 설정 내보내기(JSON)로 보관하세요.'); }
   return ok;
 }
@@ -860,7 +885,8 @@ document.querySelectorAll('dialog').forEach(d => {
 });
 
 // ---------- 헤더 · 모드 ----------
-const aiMode = () => !!S.keys[S.provider].trim();
+const aiMode = () => !!SERVER_AI || !!S.keys[S.provider].trim();
+const aiName = () => PROVIDERS[SERVER_AI ? SERVER_AI.provider : S.provider].name;
 // 헤더 날짜: 10 25 2026 SUN
 function renderToday() {
   const d = new Date();
@@ -874,7 +900,7 @@ renderToday();
 setInterval(renderToday, 60000);
 function renderMode() {
   $('appVersion').textContent = APP_VERSION;
-  $('modeBadge').textContent = aiMode() ? `● AI · ${PROVIDERS[S.provider].name}` : '○ 샘플 모드';
+  $('modeBadge').textContent = aiMode() ? `● AI · ${aiName()}` : '○ 샘플 모드';
   $('modeBadge').style.color = aiMode() ? `rgb(var(--accent))` : '';
   $('roleBadge').textContent = STUDENT ? '챗봇' : '교수용';
   $('chatTitle').textContent = `튜터봇 · ${S.course.course || (STUDENT ? DEPLOY.title : '') || '04 AI 학습용 챗봇'}`;
@@ -882,7 +908,7 @@ function renderMode() {
   const info = [S.course.univ, S.course.dept, S.course.prof && `${S.course.prof} 교수`].filter(x => x && x.trim()).join(' · ');
   $('chatCourse').textContent = info;
   $('chatCourse').classList.toggle('hidden', !info);
-  $('chatSub').textContent = `${aiMode() ? `${PROVIDERS[S.provider].name} 연결` : '샘플 모드 (API 키 없음)'} · ${RULE_LABELS.mode[S.rules.mode]} · 자료 ${activeMaterials().length}개`;
+  $('chatSub').textContent = `${aiMode() ? `${aiName()} 연결${SERVER_AI ? ' (교수님 설정)' : ''}` : '샘플 모드 (API 키 없음)'} · ${RULE_LABELS.mode[S.rules.mode]} · 자료 ${activeMaterials().length}개`;
   document.querySelectorAll('[data-quick-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.quickMode === S.rules.mode)));
 }
 
@@ -993,6 +1019,46 @@ async function pdfText(buf) {
   }
   return pages.join('\n\n').trim();
 }
+// HWPX(한글): ZIP 안의 Contents/section*.xml에서 문단(hp:p)별 글자(hp:t)를 뽑음
+async function unzipEntries(buf, want) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf), dec = new TextDecoder();
+  let eocd = -1;
+  for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error('HWPX(ZIP) 형식이 아닙니다');
+  const count = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const out = [];
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nameLen = dv.getUint16(p + 28, true), extraLen = dv.getUint16(p + 30, true), commentLen = dv.getUint16(p + 32, true);
+    const local = dv.getUint32(p + 42, true), name = dec.decode(u8.subarray(p + 46, p + 46 + nameLen));
+    p += 46 + nameLen + extraLen + commentLen;
+    if (!want.test(name)) continue;
+    const start = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
+    const raw = u8.subarray(start, start + csize);
+    let data;
+    if (method === 0) data = raw;
+    else if (method === 8) {
+      if (typeof DecompressionStream === 'undefined') throw new Error('이 브라우저는 HWPX 압축 풀기를 지원하지 않습니다(최신 Chrome·Edge 사용)');
+      data = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+    } else continue;
+    out.push({ name, text: dec.decode(data) });
+  }
+  return out;
+}
+async function hwpxText(buf) {
+  const secs = (await unzipEntries(buf, /^Contents\/section\d+\.xml$/i)).sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }));
+  if (!secs.length) throw new Error('본문(section)을 찾지 못했습니다');
+  return secs.map(s => {
+    const doc = new DOMParser().parseFromString(s.text, 'application/xml');
+    const paras = [...doc.getElementsByTagName('*')].filter(e => e.localName === 'p');
+    // 표 안 문단이 바깥 문단에 겹쳐 나오지 않도록, 자식 문단이 없는 문단의 글자만 모음
+    return paras.filter(pp => ![...pp.getElementsByTagName('*')].some(e => e.localName === 'p'))
+      .map(pp => [...pp.getElementsByTagName('*')].filter(e => e.localName === 't').map(t => t.textContent).join(''))
+      .filter(t => t.trim()).join('\n');
+  }).join('\n\n').trim();
+}
 async function loadFiles(files) {
   const st = $('fileStatus');
   showTab('file');
@@ -1001,9 +1067,14 @@ async function loadFiles(files) {
     setNote(st, 'info', `⏳ ${f.name} 읽는 중…`);
     try {
       if (f.size > 20 * 1024 * 1024) throw new Error('20MB 초과');
-      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
-      if (!isPdf && !/\.(txt|md|markdown)$/i.test(f.name) && !/^text\//.test(f.type)) throw new Error('지원하지 않는 형식');
-      const text = isPdf ? await pdfText(await f.arrayBuffer()) : (await f.text()).trim();
+      const ext = (f.name.match(/\.([^.]+)$/) || [])[1]?.toLowerCase() || '';
+      const isPdf = f.type === 'application/pdf' || ext === 'pdf';
+      if (ext === 'hwp') throw new Error('예전 한글(.hwp)은 읽을 수 없습니다. 한글에서 「다른 이름으로 저장 → HWPX」 후 올려 주세요');
+      if (!isPdf && !['txt', 'md', 'markdown', 'html', 'htm', 'hwpx'].includes(ext) && !/^text\//.test(f.type)) throw new Error('지원하지 않는 형식');
+      const text = isPdf ? await pdfText(await f.arrayBuffer())
+        : ext === 'hwpx' ? await hwpxText(await f.arrayBuffer())
+        : ext === 'html' || ext === 'htm' ? htmlToText(await f.text()).text
+        : (await f.text()).trim();
       if (!text) throw new Error(isPdf ? '글자를 뽑지 못함(스캔 이미지 PDF)' : '빈 파일');
       addMaterial({ name: f.name.replace(/\.[^.]+$/, ''), kind: 'file', src: f.name, text });
       added.push(f.name);
@@ -1364,9 +1435,15 @@ function historyFor(bot) {
   return out;
 }
 async function streamAI({ system, history: hist, onDelta = () => {}, signal, maxTokens = 2048 }) {
-  const p = S.provider, key = S.keys[p].trim(), model = S.models[p].trim() || PROVIDERS[p].model;
+  const p = SERVER_AI ? SERVER_AI.provider : S.provider, key = S.keys[p].trim(), model = S.models[p].trim() || PROVIDERS[p].model;
   let url, headers, body, pick;
-  if (p === 'claude') {
+  if (SERVER_AI) {
+    url = 'api/chat';
+    headers = {};
+    body = { system, history: hist, maxTokens };
+    pick = { claude: d => d.type === 'content_block_delta' ? d.delta?.text || '' : '', openai: d => d.choices?.[0]?.delta?.content || '',
+      gemini: d => (d.candidates?.[0]?.content?.parts || []).map(x => x.text || '').join('') }[p];
+  } else if (p === 'claude') {
     url = 'https://api.anthropic.com/v1/messages';
     headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
     body = { model, max_tokens: maxTokens, stream: true, system, messages: hist.map(m => ({ role: m.role, content: m.text })) };
@@ -1388,7 +1465,7 @@ async function streamAI({ system, history: hist, onDelta = () => {}, signal, max
     const b = await res.json().catch(() => ({}));
     const msg = b?.error?.message || (Array.isArray(b) && b[0]?.error?.message) || `HTTP ${res.status}`;
     // OpenAI 상위 모델은 조직 인증 전에는 스트리밍을 막을 수 있음 → 스트리밍 없이 한 번에 받아 표시
-    if (p === 'openai' && /stream/i.test(msg) && /verif|organization/i.test(msg)) {
+    if (!SERVER_AI && p === 'openai' && /stream/i.test(msg) && /verif|organization/i.test(msg)) {
       const r2 = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ ...body, stream: false }), signal });
       const b2 = await r2.json().catch(() => ({}));
       if (!r2.ok) throw new Error(b2?.error?.message || `HTTP ${r2.status}`);
@@ -1599,7 +1676,7 @@ function welcomeHTML() {
     : `안녕하십니까. **${name}** 튜터봇입니다.\n강의계획서와 수업자료를 근거로 답변드리며, 자료에 없는 내용은 그 사실을 먼저 밝힙니다.\n- 📘 **설명 모드**: 답을 바로 설명\n- 🧩 **힌트 모드**: 단계별 힌트로 스스로 답에 이르도록 도움\n아래 추천 질문으로 시작해 보십시오.`;
   return `<div class="flex items-start gap-2 pr-4 sm:pr-10"><div class="avatar" aria-hidden="true">T</div><div class="min-w-0 flex-1">
     <p class="text-[11px] font-bold mb-1">튜터봇</p>
-    <div class="bubble bubble-bot max-w-[88%]"><div class="md">${md(t)}</div>${aiMode() ? '' : '<p class="mt-2 text-[11px] text-mute">지금은 API 키 없이 <b>샘플 모드</b>로 작동해요. ⚙ 버튼에서 키를 넣으면 AI가 답합니다.</p>'}</div>
+    <div class="bubble bubble-bot max-w-[88%]"><div class="md">${md(t)}</div>${aiMode() ? '' : `<p class="mt-2 text-[11px] text-mute">지금은 API 키 없이 <b>샘플 모드</b>로 작동해요. ${STUDENT ? '수업자료에서 근거 문장을 찾아 답합니다.' : '⚙ 버튼에서 키를 넣으면 AI가 답합니다.'}</p>`}</div>
   </div></div>`;
 }
 function renderMessages(scroll) {
@@ -1910,7 +1987,16 @@ $('saveMenuBtn').onclick = () => toggleMenu($('saveMenu').classList.contains('hi
 $('saveMenu').onclick = e => { const b = e.target.closest('[data-save]'); if (!b) return; toggleMenu(false); if (needMessages()) SAVERS[b.dataset.save](); };
 document.addEventListener('click', e => { if (!e.target.closest('#saveMenu, #saveMenuBtn')) toggleMenu(false); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('saveMenu').classList.contains('hidden')) { toggleMenu(false); $('saveMenuBtn').focus(); } });
-document.querySelector('[data-act="submitJson"]').onclick = () => { if (needMessages()) exportJSON(); };
+// 학생 정보 저장: 세 칸을 모두 채웠는지 확인하고 설정 창을 닫음 (제출 파일은 채팅 머리의 저장 ▾ 메뉴)
+$('saveStudent').onclick = () => {
+  const empty = [...document.querySelectorAll('[data-student-field]')].find(i => !i.value.trim());
+  if (empty) { $('studentNote').textContent = '⚠ 성명·학과·학번을 모두 입력하세요'; empty.focus(); return; }
+  saveSettings();
+  renderStudentNote();
+  $('dlgSetup').close();
+  toast(`${S.student.name} 학생 정보를 저장했습니다.`);
+  $('ask').focus({ preventScroll: true });
+};
 
 // ---------- 챗봇 HTML · 히스토리 ----------
 // 화면에 보이는 자료(비어 있으면 샘플 자료)를 그대로 세트로 씀
@@ -2149,13 +2235,14 @@ if (STUDENT) {
   document.body.classList.add('is-student');
   document.title = `${S.course.course || DEPLOY.title} — 튜터봇`;
   // 학생 정보·AI 설정을 설정 창으로 옮김 (이벤트는 그대로 유지)
-  $('setupBody').append($('studentBox'), $('aiSection'));
+  // 설정 창에는 학생 정보만 표시 (AI 설정은 교수 모드에서만)
+  $('setupBody').append($('studentBox'));
   $('openSetup').onclick = () => { renderSettings(); $('dlgSetup').showModal(); };
 }
 // 교수 로그인 · 로그아웃 (내려받은 챗봇 HTML에는 로그인 없음)
 $('logoutBtn').classList.toggle('hidden', !PROF);
 $('openLogin').classList.toggle('hidden', !!FILE_DEPLOY || PROF);
-$('setupLogin').classList.toggle('hidden', !!FILE_DEPLOY || PROF);
+$('setupLogin').classList.add('hidden');
 $('setupLogin').querySelector('button').onclick = () => { $('dlgSetup').close(); $('openLogin').click(); };
 $('openLogin').onclick = () => { $('loginErr').classList.add('hidden'); $('loginPw').value = ''; $('dlgLogin').showModal(); $('loginPw').focus(); };
 $('loginForm').onsubmit = e => {
@@ -2206,12 +2293,60 @@ async function publishNow() {
   }
 }
 $('publishBtn').onclick = () => { lastPublished = ''; publishNow(); };
+
+// ---------- 학생 화면 AI: 교수 키를 서버에 맡김 ----------
+var lastAIShare = '', aiShareTimer = null;
+function setShareStatus(kind, msg) { const el = $('shareAIStatus'); el.textContent = msg; el.style.color = kind === 'ok' ? 'rgb(var(--accent))' : kind === 'fail' ? '#3a3a3f' : ''; }
+const aiSharePayload = () => S.shareAI && S.keys[S.provider].trim()
+  ? JSON.stringify({ provider: S.provider, key: S.keys[S.provider].trim(), model: S.models[S.provider].trim() || PROVIDERS[S.provider].model, effort: S.effort }) : 'off';
+function scheduleAIShare(delay = 1200) {
+  if (!PROF || !SERVER) return;
+  if (aiSharePayload() === lastAIShare) return;
+  clearTimeout(aiShareTimer);
+  aiShareTimer = setTimeout(shareAINow, delay);
+}
+async function shareAINow() {
+  let token = '';
+  try { token = sessionStorage.getItem(PROF_TOKEN) || ''; } catch {}
+  const body = aiSharePayload(), off = body === 'off';
+  try {
+    const r = await fetch('api/ai', { method: off ? 'DELETE' : 'PUT', headers: { 'content-type': 'application/json', 'x-tutorbot-token': token }, body: off ? undefined : body });
+    const b = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(b.error || `HTTP ${r.status}`);
+    lastAIShare = body;
+    setShareStatus(off ? 'info' : 'ok', off
+      ? (S.shareAI ? '키를 넣으면 학생 화면도 AI로 답합니다. 지금 학생 화면은 샘플 모드입니다.' : '꺼짐 — 학생 화면은 샘플 모드로 답합니다.')
+      : `● 학생 화면 AI 켜짐 · ${b.provider ? PROVIDERS[b.provider].name : ''} ${b.model || ''} · 비용은 교수님 계정으로 청구`);
+  } catch (e) { setShareStatus('fail', `⚠ 학생 화면 AI 설정을 저장하지 못했습니다 — ${e.message}`); }
+}
+$('shareAI').onchange = () => { S.shareAI = $('shareAI').checked; saveSettings(); };
+
+// 학생 화면: 교수님이 자료를 바꾸면 새로고침하지 않아도 1분 안에 반영
+var publishedAt = DEPLOY?.updatedAt || '';
+async function refreshPublished() {
+  if (!STUDENT || FILE_DEPLOY || !SERVER || busy) return;
+  try {
+    const r = await fetch('api/deploy', { cache: 'no-store' });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!Array.isArray(d?.materials) || d.updatedAt === publishedAt) return;
+    publishedAt = d.updatedAt;
+    S.course = { ...S.course, ...(d.course || {}) };
+    S.materials = d.materials.filter(validMat).map(normMat);
+    S.rules.reveal = d.rules?.reveal !== false;
+    renderMode(); renderMaterials(); renderSummaries(); renderCourseView(); renderMessages();
+    document.title = `${S.course.course || '04 AI 학습용 챗봇'} — 튜터봇`;
+    chips = sampleChips(); renderChips(); scheduleChips(0);
+    toast('교수님이 수업자료를 새로 올렸습니다. 새 자료로 답합니다.');
+  } catch {}
+}
+if (STUDENT && !FILE_DEPLOY && SERVER) setInterval(refreshPublished, 60000);
 renderAll();
 fitChat();
 growAsk();
 if (!chips.length) scheduleChips(0);
 else { const lastBot = [...messages].reverse().find(m => m.role === 'assistant'); if (!lastBot && aiMode()) scheduleChips(0); }
-if (PROF) schedulePublish(300);
+if (PROF) { schedulePublish(300); $('shareAI').checked = S.shareAI; scheduleAIShare(300); }
 </script>
 </body>
 </html>
