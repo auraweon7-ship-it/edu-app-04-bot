@@ -330,10 +330,10 @@
         <div id="checkStatus" class="hidden mt-2 rounded-2xl px-3 py-2 text-xs leading-5" role="status"></div>
         <div class="mt-3 glass-chip rounded-2xl px-3.5 py-2.5 space-y-1.5" data-prof>
           <label class="flex items-center justify-between gap-3 text-xs font-bold cursor-pointer">
-            <span>🎓 학생 화면에서도 이 키로 AI 답변</span>
+            <span>🎓 학생 화면에서도 내 키로 AI 답변 <span class="font-normal text-mute">(교수님별·과목별)</span></span>
             <input id="shareAI" type="checkbox" class="switch">
           </label>
-          <p id="shareAIStatus" class="text-[11px] text-mute leading-5">키는 이 PC의 서버에만 저장되고 학생 브라우저로는 보내지 않습니다. 학생 질문 비용은 교수님 계정으로 청구됩니다.</p>
+          <p id="shareAIStatus" class="text-[11px] text-mute leading-5">켜면 위 키를 서버 비밀값으로 암호화해 이 과목 자료에 담습니다. 학생 브라우저·GitHub에는 암호문만 가고 키 원문은 가지 않습니다. 학생 질문 비용은 교수님 계정으로 청구됩니다.</p>
         </div>
         <div class="mt-3 glass-chip rounded-2xl px-3.5 py-2.5 space-y-2" data-prof>
           <label for="aiProxy" class="block text-xs font-bold">🌐 온라인(GitHub Pages) AI 중계 주소 <span class="font-normal text-mute">— Cloudflare Workers</span></label>
@@ -696,6 +696,7 @@
 <script id="deployData" type="application/json">null</script>
 <script>
 // 화면·저장 파일에 표시되는 앱 버전. 수정할 때마다 올림: 새 기능 → 둘째 자리, 고침·디자인 → 셋째 자리
+// v1.16.0 교수님별 API 키: 🔑 AI SETTING의 키를 서버(/api/seal)가 암호화해 과목 자료에 담고, 학생 질문 때 서버가 풀어 AI 호출 (Vercel 환경 변수 AI_KEY 불필요, TUTORBOT_SECRET만)
 // v1.15.5 구글 드라이브 불러오기 오류 안내 개선(중계 기능 없음·로그인 필요를 구분), 공개 리더는 원래 공유 주소로도 재시도
 // v1.15.4 URL·구글 드라이브 자료 새로고침: 「모두 다시 불러오기」와 자료별 ↻, 불러온 날짜 표시, 바뀐 자료 요약
 // v1.15.3 REFERENCE → URL에 구글 드라이브·문서·슬라이드·시트 공유 링크 지원 (서버·Vercel 중계 /api/fetch, PDF·HWPX·HTML·TXT 글자 추출)
@@ -737,7 +738,7 @@
 // v1.2.0  STEP 3 추천 질문 자동 생성, TEXT·FILE·URL 자료 쌓기, 출처 칩, 힌트 단계, 스트리밍·중지·다시 생성, 말투·길이·언어
 // v1.1.0  STEP 2 AI 설정 모달(Claude·OpenAI·Gemini), 연결 확인·모델 제안, 설정 저장·내보내기, 접는 패널
 // v1.0.0  STEP 1 기본 골격: 참고자료 패널, 메신저 채팅, 추천 질문, TXT 저장
-const APP_VERSION = 'v1.15.5';
+const APP_VERSION = 'v1.16.0';
 
 // 학생용 파일을 만들 때 쓰는 원본: 스크립트가 화면을 바꾸기 전에 복사 (Tailwind가 넣은 스타일은 제외)
 const SOURCE_HTML = (() => {
@@ -779,7 +780,7 @@ function fetchPublished() {
 }
 const DEPLOY = FILE_DEPLOY || (PROF ? null : (() => {
   const pub = fetchPublished();
-  if (pub) return { id: pub._src === REF_FILE ? 'github' : 'server', title: pub.course?.course || pub.title || '04 AI 학습용 챗봇', course: pub.course || {}, materials: pub.materials, rules: pub.rules || {}, updatedAt: pub.updatedAt, aiProxy: typeof pub.aiProxy === 'string' ? pub.aiProxy : '' };
+  if (pub) return { id: pub._src === REF_FILE ? 'github' : 'server', title: pub.course?.course || pub.title || '04 AI 학습용 챗봇', course: pub.course || {}, materials: pub.materials, rules: pub.rules || {}, updatedAt: pub.updatedAt, ai: pub.ai && typeof pub.ai.sealed === 'string' ? pub.ai : null, aiProxy: typeof pub.aiProxy === 'string' ? pub.aiProxy : '' };
   let s = null;
   let ai = null;
   try { s = JSON.parse(localStorage.getItem(PROF_SETTINGS_KEY) || 'null'); ai = JSON.parse(localStorage.getItem(AI_SETTINGS_KEY) || 'null'); } catch {}
@@ -799,6 +800,9 @@ function aiStatus(url) {
   } catch { return null; }
 }
 const SERVER_AI = !FILE_DEPLOY && !PROF && SERVER ? (() => {
+  // 교수님별 키(암호문)가 과목 자료에 있으면 그것으로
+  const sa = DEPLOY?.ai;
+  if (sa && ['claude', 'openai', 'gemini'].includes(sa.provider)) return { provider: sa.provider, model: sa.model, chat: '/api/chat', sealed: sa.sealed };
   const local = aiStatus('/api/ai');
   if (local) return { ...local, chat: '/api/chat' };
   const base = proxyBase(DEPLOY?.aiProxy);
@@ -881,6 +885,7 @@ const S = {
   effort: '',
   shareAI: true,
   aiProxy: '',
+  aiSealed: null, // 교수님 키 암호문 (서버가 만들어 줌, 과목 자료에 담김)
   course: { univ: '', dept: '', prof: '', course: '' },
   materials: [],
   rules: { mode: 'explain', tone: 'friendly', length: 'normal', lang: 'ko', reveal: true },
@@ -1720,7 +1725,7 @@ async function streamAI({ system, history: hist, onDelta = () => {}, signal, max
   if (SERVER_AI) {
     url = SERVER_AI.chat;
     headers = {};
-    body = { system, history: hist, maxTokens };
+    body = { system, history: hist, maxTokens, ...(SERVER_AI.sealed ? { sealed: SERVER_AI.sealed } : {}) };
     pick = { claude: d => d.type === 'content_block_delta' ? d.delta?.text || '' : '', openai: d => d.choices?.[0]?.delta?.content || '',
       gemini: d => (d.candidates?.[0]?.content?.parts || []).map(x => x.text || '').join('') }[p];
   } else if (p === 'claude') {
@@ -2557,7 +2562,7 @@ $('logoutBtn').onclick = () => {
 // ---------- 학생 화면에 게시 (교수 모드 → 서버) ----------
 var PROF_TOKEN = 'tutorbot-token'; // var: 위쪽 저장 함수가 먼저 불려도 안전하게
 var lastPublished = '', publishTimer = null;
-const publishPayload = () => JSON.stringify({ title: S.course.course || autoTitle(), course: S.course, materials: activeMaterials(), rules: S.rules, aiProxy: proxyBase(S.aiProxy) });
+const publishPayload = () => JSON.stringify({ title: S.course.course || autoTitle(), course: S.course, materials: activeMaterials(), rules: S.rules, aiProxy: proxyBase(S.aiProxy), ai: S.shareAI && S.aiSealed ? S.aiSealed : null });
 // 중계 서버 주소: 저장 + 연결 확인 (중계 서버는 GitHub Pages 주소에서 온 요청만 받으므로 여기서는 연결 여부만 봄)
 $('aiProxy').value = S.aiProxy;
 $('aiProxy').addEventListener('change', () => { S.aiProxy = proxyBase($('aiProxy').value); $('aiProxy').value = S.aiProxy; saveSettings(); });
@@ -2612,15 +2617,13 @@ async function checkServer() {
     setPublishStatus('info', gh
       ? '온라인(GitHub Pages) 배포: 「reference.json ↓」로 받은 파일을 GitHub 저장소의 index.html 옆에 올리면 학생 화면에 반영됩니다(1~10분).'
       : `이 주소(${location.origin})는 자동 반영 서버가 아닙니다. 「reference.json ↓」 파일을 앱(index.html) 옆에 올리거나, node server.js 주소로 여세요.`);
-    setShareStatus('info', '서버가 없는 온라인 배포(GitHub Pages)에서는 교수님 키를 학생 화면과 나눌 수 없습니다. 키를 웹에 올리면 누구나 가져가 쓸 수 있기 때문입니다. 학생 화면은 샘플 모드로 답합니다.');
+    if (!S.aiSealed) setShareStatus('info', '서버가 없는 온라인 배포(GitHub Pages)에서는 교수님 키를 학생 화면과 나눌 수 없습니다. 키를 웹에 올리면 누구나 가져가 쓸 수 있기 때문입니다. 학생 화면은 샘플 모드로 답합니다.');
     // Vercel 배포: 키는 Vercel 환경 변수에 있고 /api/ai·/api/chat 함수가 학생 질문을 대신 보냄
     try {
       const v = await (await fetch('/api/ai', { cache: 'no-store' })).json();
       if (v?.host === 'vercel') {
         setPublishStatus('info', 'Vercel 배포: 「reference.json ↓」로 받은 파일을 GitHub 저장소의 index.html 옆에 올리면 자동으로 다시 배포되어 학생 화면에 반영됩니다(1~2분).');
-        setShareStatus(v.enabled ? 'ok' : 'info', v.enabled
-          ? `● 학생 화면 AI 켜짐 — Vercel 환경 변수의 키 사용 · ${PROVIDERS[v.provider]?.name || v.provider} ${v.model} · 비용은 교수님 계정으로 청구`
-          : 'Vercel 프로젝트 Settings → Environment Variables에 AI_KEY·AI_PROVIDER·AI_MODEL을 넣고 다시 배포하면 학생 화면 AI가 켜집니다.');
+        if (!v.sealing) setShareStatus('fail', '⚠ Vercel 환경 변수에 TUTORBOT_SECRET(16자 이상 아무 문자열)을 넣고 Redeploy 해야 교수님 키로 학생 화면 AI를 켤 수 있습니다.');
       }
     } catch {}
   }
@@ -2753,7 +2756,9 @@ $('refJsonBtn').onclick = () => {
   toast(`${REF_FILE}을 내려받았습니다. GitHub 저장소의 index.html 옆에 올리세요.`);
 };
 
-// ---------- 학생 화면 AI: 교수 키를 서버에 맡김 ----------
+// ---------- 학생 화면 AI: 교수님별 키를 서버가 암호화해 과목 자료에 담음 ----------
+// 교수님이 🔑 AI SETTING에 넣은 키 → /api/seal(교수 로그인)로 암호문을 받음 → reference json·서버 게시 자료에 포함
+// 학생 질문 → /api/chat에 암호문을 함께 보냄 → 서버가 풀어서 AI에 요청 (키 원문은 학생·GitHub에 없음)
 var lastAIShare = '', aiShareTimer = null;
 function setShareStatus(kind, msg) { const el = $('shareAIStatus'); el.textContent = msg; el.style.color = kind === 'ok' ? 'rgb(var(--accent))' : kind === 'fail' ? '#3a3a3f' : ''; }
 const aiSharePayload = () => S.shareAI && S.keys[S.provider].trim()
@@ -2765,20 +2770,30 @@ function scheduleAIShare(delay = 1200) {
   aiShareTimer = setTimeout(shareAINow, delay);
 }
 async function shareAINow() {
-  if (serverOK === null) await checkServer();
-  if (serverOK === false) return;
   let token = '';
   try { token = sessionStorage.getItem(PROF_TOKEN) || ''; } catch {}
   const body = aiSharePayload(), off = body === 'off';
+  lastAIShare = body;
+  // 예전 방식(서버에 키 파일)으로 켜 둔 것이 있으면 정리 (튜터봇 서버에서만 의미 있음)
+  fetch('/api/ai', { method: 'DELETE', headers: { 'x-tutorbot-token': token } }).catch(() => {});
+  if (off) {
+    S.aiSealed = null;
+    schedulePublish(300);
+    setShareStatus('info', S.shareAI ? '🔑 위에 API 키를 넣으면 학생 화면도 이 키로 AI 답변합니다. 지금 학생 화면은 샘플 모드입니다.' : '꺼짐 — 학생 화면은 샘플 모드로 답합니다.');
+    return;
+  }
   try {
-    const r = await fetch('/api/ai', { method: off ? 'DELETE' : 'PUT', headers: { 'content-type': 'application/json', 'x-tutorbot-token': token }, body: off ? undefined : body });
+    const r = await fetch('/api/seal', { method: 'POST', headers: { 'content-type': 'application/json', 'x-tutorbot-token': token }, body });
     const b = await r.json().catch(() => ({}));
+    if (r.status === 404 || r.status === 405) throw new Error('이 사이트에는 키 암호화 기능(api/seal.mjs)이 없습니다. GitHub에 deploy 폴더의 api 폴더를 올려 주세요');
     if (!r.ok) throw new Error(b.error || `HTTP ${r.status}`);
-    lastAIShare = body;
-    setShareStatus(off ? 'info' : 'ok', off
-      ? (S.shareAI ? '키를 넣으면 학생 화면도 AI로 답합니다. 지금 학생 화면은 샘플 모드입니다.' : '꺼짐 — 학생 화면은 샘플 모드로 답합니다.')
-      : `● 학생 화면 AI 켜짐 · ${b.provider ? PROVIDERS[b.provider].name : ''} ${b.model || ''} · 비용은 교수님 계정으로 청구`);
-  } catch (e) { setShareStatus('fail', `⚠ 학생 화면 AI 설정을 저장하지 못했습니다 — ${e.message}${/Failed to fetch|404|405|501/.test(e.message) ? ` · 요청 주소 ${location.origin}/api/ai — 이 주소가 node server.js 창에 나온 주소와 같은지 확인` : ''}`); }
+    S.aiSealed = { provider: b.provider, model: b.model, sealed: b.sealed };
+    schedulePublish(300);
+    setShareStatus('ok', `● 학생 화면 AI 켜짐 · ${PROVIDERS[b.provider]?.name || b.provider} ${b.model} · 교수님 키를 암호화해 이 과목 자료에 담았습니다${serverOK === false ? ` — 「${REF_FILE} ↓」을 다시 받아 GitHub에 올리면 학생 화면에 반영됩니다` : ''} · 비용은 교수님 계정으로 청구`);
+  } catch (e) {
+    S.aiSealed = null;
+    setShareStatus('fail', `⚠ 학생 화면 AI를 켜지 못했습니다 — ${e.message}`);
+  }
 }
 $('shareAI').onchange = () => { S.shareAI = $('shareAI').checked; saveSettings(); };
 
